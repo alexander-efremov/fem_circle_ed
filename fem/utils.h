@@ -225,6 +225,7 @@ inline void append_statistics(int ox_len, int oy_len, double tau, int iterCount,
     fclose(file);
 }
 
+
 inline void append_statistics_expl(int ox_len, int oy_len, double tau, double err_l1_vec,
                               double err_l1_tr, double *extrem, double *extrem_err, int time_steps) {
     FILE *file;
