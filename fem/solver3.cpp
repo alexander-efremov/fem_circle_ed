@@ -7,793 +7,1624 @@
 #include "utils.h"
 #include "common.h"
 
-inline void print_data_to_files(double *phi, double *density, double *residual, int tl) {
-//    print_surface("phi", OX_LEN, OY_LEN, HX, HY, tl, A, C, get_center_x(), get_center_y(), TAU,
-//                  U_VELOCITY, V_VELOCITY, phi);
-    print_surface("rho", OX_LEN, OY_LEN, HX, HY, tl, A, C, get_center_x(), get_center_y(), TAU,
-                  U_VELOCITY, V_VELOCITY, density);
-//    print_surface("res", OX_LEN, OY_LEN, HX, HY, tl, A, C, get_center_x(), get_center_y(), TAU,
-//                  U_VELOCITY, V_VELOCITY, residual);
-    double *err_lock = calc_error_3(HX, HY, tl * TAU, density);
-    print_surface("err-l", OX_LEN, OY_LEN, HX, HY, tl, A, C, get_center_x(), get_center_y(),
-                  TAU, U_VELOCITY, V_VELOCITY, err_lock);
-    delete[] err_lock;
+int TYPE_EXACT = 5;
+
+inline void print_3D(const char *filename, int ox_len, int oy_len,
+                          double hx, double hy, int iter, double a, double c, double *data) {
+    char name[150];
+    sprintf(name, "%s_nx=%d_h=%5.3f_iter=%d_a=%g_c=%g.dat",
+            filename, ox_len + 1, hx, iter, a, c);
+    FILE *file = fopen(name, "w");
+    fprintf(file, "TITLE = 'DEM DATA | DEM DATA | DEM DATA | DEM DATA'\nVARIABLES = 'x' 'y' %s\nZONE T='SubZone'",filename);
+    fprintf(file, "\nI=%d J=%d K=%d ZONETYPE=Ordered", oy_len + 1, ox_len + 1, 1);
+    fprintf(file, "\nDATAPACKING=POINT\nDT=(SINGLE SINGLE SINGLE)");
+    for (int i = 0; i < ox_len + 1; i++)
+        for (int j = 0; j < oy_len + 1; j++)
+            fprintf(file, "\n%-30.20g  %-30.20g %-30.20g", i * hx, j * hy,
+                    data[(oy_len + 1) * i + j]);
+
+    fclose(file);
 }
 
-inline static double func_u(double t, double x, double y) { return (-y+CENTER_OFFSET_Y)*U_VELOCITY; }
-
-inline static double func_v(double t, double x, double y) { return (x-CENTER_OFFSET_X)*V_VELOCITY; }
-
-inline static double analytical_solution_circle(double t, double x, double y) {
-    double r = 0.2;
-    double da = OMEGA;
-
-    double x0 = get_center_x() - r*sin(t*da);
-    double y0 = get_center_y() + r*cos(t*da);
-    double value = (x - x0) * (x - x0) + (y - y0) * (y - y0);
-    if (value < R_SQ)
-        return INN_DENSITY;
-    return OUT_DENSITY;
+inline void print_data_to_files(const char *filename,
+                                double *u, double *u_xx, double *u_yy, int iter) {
+    char name[50];
+    print_3D(filename, OX_LEN, OY_LEN, HX, HY, iter, A, C, u);
+    sprintf(name, "%s_xx", filename);
+    print_3D(name, OX_LEN, OY_LEN, HX, HY, iter, A, C, u_xx);
+    sprintf(name, "%s_yy", filename);
+    print_3D(name, OX_LEN, OY_LEN, HX, HY, iter, A, C, u_yy);
 }
 
-static double get_phi_integ_trapezium(int ii, int jj, double *density, double time_value) {
-    double x1 = 0.;
-    double y1 = 0.;
-    double x2 = 0.;
-    double y2 = 0.;
-    double x3 = 0.;
-    double y3 = 0.;
-    double x4 = 0.;
-    double y4 = 0.;
 
-    get_coordinates_on_curr(ii, jj, x1, y1, x2, y2, x3, y3, x4, y4);
+inline static double analytical_slv(double x, double y) {
 
-    double u = func_u(time_value, x1, y1);
-    double v = func_v(time_value, x1, y1);
-    x1 = x1 - TAU * u;
-    y1 = y1 - TAU * v;
-    u = func_u(time_value, x2, y2);
-    v = func_v(time_value, x2, y2);
-    x2 = x2 - TAU * u;
-    y2 = y2 - TAU * v;
-    u = func_u(time_value, x3, y3);
-    v = func_v(time_value, x3, y3);
-    x3 = x3 - TAU * u;
-    y3 = y3 - TAU * v;
-    u = func_u(time_value, x4, y4);
-    v = func_v(time_value, x4, y4);
-    x4 = x4 - TAU * u;
-    y4 = y4 - TAU * v;
-    if (x1 <= A || x1 >= B || x2 <= A || x2 >= B || x3 <= A || x3 >= B || x4 <= A || x4 >= B
-        || y1 <= C || y1 >= D || y2 <= C || y2 >= D || y3 <= C || y3 >= D || y4 <= C || y4 >= D)
-        printf("PREV Time level %.8le! ERROR INDEX i=%d j=%d : x1=%.8le * y1=%.8le ** x2=%.8le * y2=%.8le ** x3=%.8le * y3=%.8le ** "
-                       "x4=%.8le * y4=%.8le\n ", time_value, ii, jj, x1, y1, x2, y2, x3, y3, x4, y4);
-
-    int nx = IDEAL_SQ_SIZE_X;
-    int ny = IDEAL_SQ_SIZE_Y;
-
-    double x_step = 1. / nx;
-    double y_step = 1. / ny;
-
-    // get right part for jakoby
-    double phi = 0.;
-    double mes = x_step * y_step;
-    for (int i = 0; i < nx; ++i) {
-        for (int j = 0; j < ny; ++j) {
-
-            double ideal_x = i * x_step + x_step / 2.;
-            double ideal_y = j * y_step + y_step / 2.;
-
-            double a11 = (x2 - x1) + (x1 + x3 - x2 - x4) * ideal_y;
-            double a12 = (x4 - x1) + (x1 + x3 - x2 - x4) * ideal_x;
-            double a21 = (y2 - y1) + (y1 + y3 - y2 - y4) * ideal_y;
-            double a22 = (y4 - y1) + (y1 + y3 - y2 - y4) * ideal_x;
-            double jakob = a11 * a22 - a21 * a12;
-
-            // point (x_i,y_j)
-            ideal_x = i * x_step;
-            ideal_y = j * y_step;
-
-            double real_x = x1 + (x2 - x1) * ideal_x + (x4 - x1) * ideal_y
-                            + (x1 + x3 - x2 - x4) * ideal_x * ideal_y;
-            double real_y = y1 + (y2 - y1) * ideal_x + (y4 - y1) * ideal_y
-                            + (y1 + y3 - y2 - y4) * ideal_x * ideal_y;
-
-            if (real_x < A || real_y < C || real_x > B || real_y > D) {
-                printf("Time level %.8le! ERROR INDEX i=%d j=%d : REAL x=%.8le * y=%.8le ** IDEAL x=%.8le * y=%.8le \n",
-                       time_value, ii, jj, real_x, real_y, ideal_x, ideal_y);
-                printf("1: %.8le * %.8le ** 2: %.8le * %.8le ** 3: %.8le * %.8le ** 4: %.8le * %.8le\n",
-                       x1, y1, x2, y2, x3, y3, x4, y4);
-            }
-
-            // find out in which square real point was placed
-            int sq_i = (int) ((real_x - A) / HX);
-            int sq_j = (int) ((real_y - C) / HY);
-            if (sq_i < 0 || sq_j < 0 || sq_i > OX_LEN - 1 || sq_j > OY_LEN - 1) {
-                printf("Time level %.8le! ERROR INDEX i=%d j=%d : i*=%d j*=%d\n", time_value,
-                       ii, jj, sq_i, sq_j);
-            }
-            double x = A + sq_i * HX;
-            double y = C + sq_j * HY;
-
-            // formula 4
-            double dens_1 = density[sq_i * OY_LEN_1 + sq_j] * (1 - (real_x - x) / HX) * (1 - (real_y - y) / HY)
-                            + density[(sq_i + 1) * OY_LEN_1 + sq_j] * ((real_x - x) / HX) * (1 - (real_y - y) / HY)
-                            + density[(sq_i + 1) * OY_LEN_1 + sq_j + 1] * ((real_x - x) / HX) * ((real_y - y) / HY)
-                            + density[sq_i * OY_LEN_1 + sq_j + 1] * (1 - (real_x - x) / HX) * ((real_y - y) / HY);
-
-            // point (x_{i+1},y_j)
-            ideal_x = (i + 1) * x_step;
-            ideal_y = j * y_step;
-            real_x = x1 + (x2 - x1) * ideal_x + (x4 - x1) * ideal_y
-                     + (x1 + x3 - x2 - x4) * ideal_x * ideal_y;
-            real_y = y1 + (y2 - y1) * ideal_x + (y4 - y1) * ideal_y
-                     + (y1 + y3 - y2 - y4) * ideal_x * ideal_y;
-            if (real_x < A || real_y < C || real_x > B || real_y > D) {
-                printf("Time level %.8le! ERROR INDEX i=%d j=%d : REAL x=%.8le * y=%.8le ** IDEAL x=%.8le * y=%.8le \n",
-                       time_value, ii, jj, real_x, real_y, ideal_x, ideal_y);
-                printf("1: %.8le * %.8le ** 2: %.8le * %.8le ** 3: %.8le * %.8le ** 4: %.8le * %.8le\n",
-                       x1, y1, x2, y2, x3, y3, x4, y4);
-            }
-
-            // find out in which square real point was placed
-            sq_i = (int) ((real_x - A) / HX);
-            sq_j = (int) ((real_y - C) / HY);
-            if (sq_i < 0 || sq_j < 0 || sq_i > OX_LEN - 1 || sq_j > OY_LEN - 1) {
-                printf("Time level %.8le! ERROR INDEX i=%d j=%d : i*=%d j*=%d\n", time_value,
-                       ii, jj, sq_i, sq_j);
-            }
-            x = A + sq_i * HX;
-            y = C + sq_j * HY;
-
-            // formula 4
-            double dens_2 = density[sq_i * OY_LEN_1 + sq_j] * (1 - (real_x - x) / HX) * (1 - (real_y - y) / HY)
-                            + density[(sq_i + 1) * OY_LEN_1 + sq_j] * ((real_x - x) / HX) * (1 - (real_y - y) / HY)
-                            + density[(sq_i + 1) * OY_LEN_1 + sq_j + 1] * ((real_x - x) / HX) * ((real_y - y) / HY)
-                            + density[sq_i * OY_LEN_1 + sq_j + 1] * (1 - (real_x - x) / HX) * ((real_y - y) / HY);
-
-
-            // point (x_{i+1},y_{j+1})
-            ideal_x = (i + 1) * x_step;
-            ideal_y = (j + 1) * y_step;
-            real_x = x1 + (x2 - x1) * ideal_x + (x4 - x1) * ideal_y
-                     + (x1 + x3 - x2 - x4) * ideal_x * ideal_y;
-            real_y = y1 + (y2 - y1) * ideal_x + (y4 - y1) * ideal_y
-                     + (y1 + y3 - y2 - y4) * ideal_x * ideal_y;
-            if (real_x < A || real_y < C || real_x > B || real_y > D) {
-                printf("Time level %.8le! ERROR INDEX i=%d j=%d : REAL x=%.8le * y=%.8le ** IDEAL x=%.8le * y=%.8le \n",
-                       time_value, ii, jj, real_x, real_y, ideal_x, ideal_y);
-                printf("1: %.8le * %.8le ** 2: %.8le * %.8le ** 3: %.8le * %.8le ** 4: %.8le * %.8le\n",
-                       x1, y1, x2, y2, x3, y3, x4, y4);
-            }
-
-            // find out in which square real point was placed
-            sq_i = (int) ((real_x - A) / HX);
-            sq_j = (int) ((real_y - C) / HY);
-            if (sq_i < 0 || sq_j < 0 || sq_i > OX_LEN - 1 || sq_j > OY_LEN - 1) {
-                printf("Time level %.8le! ERROR INDEX i=%d j=%d : i*=%d j*=%d\n", time_value,
-                       ii, jj, sq_i, sq_j);
-            }
-            x = A + sq_i * HX;
-            y = C + sq_j * HY;
-
-            // formula 4
-            double dens_3 = density[sq_i * OY_LEN_1 + sq_j] * (1 - (real_x - x) / HX) * (1 - (real_y - y) / HY)
-                            + density[(sq_i + 1) * OY_LEN_1 + sq_j] * ((real_x - x) / HX) * (1 - (real_y - y) / HY)
-                            + density[(sq_i + 1) * OY_LEN_1 + sq_j + 1] * ((real_x - x) / HX) * ((real_y - y) / HY)
-                            + density[sq_i * OY_LEN_1 + sq_j + 1] * (1 - (real_x - x) / HX) * ((real_y - y) / HY);
-
-            // point (x_i,y_{j+1})
-            ideal_x = i * x_step;
-            ideal_y = (j + 1) * y_step;
-            real_x = x1 + (x2 - x1) * ideal_x + (x4 - x1) * ideal_y
-                     + (x1 + x3 - x2 - x4) * ideal_x * ideal_y;
-            real_y = y1 + (y2 - y1) * ideal_x + (y4 - y1) * ideal_y
-                     + (y1 + y3 - y2 - y4) * ideal_x * ideal_y;
-            if (real_x < A || real_y < C || real_x > B || real_y > D) {
-                printf("Time level %.8le! ERROR INDEX i=%d j=%d : REAL x=%.8le * y=%.8le ** IDEAL x=%.8le * y=%.8le \n",
-                       time_value, ii, jj, real_x, real_y, ideal_x, ideal_y);
-                printf("1: %.8le * %.8le ** 2: %.8le * %.8le ** 3: %.8le * %.8le ** 4: %.8le * %.8le\n",
-                       x1, y1, x2, y2, x3, y3, x4, y4);
-            }
-
-            // find out in which square real point was placed
-            sq_i = (int) ((real_x - A) / HX);
-            sq_j = (int) ((real_y - C) / HY);
-            if (sq_i < 0 || sq_j < 0 || sq_i > OX_LEN - 1 || sq_j > OY_LEN - 1) {
-                printf("Time level %.8le! ERROR INDEX i=%d j=%d : i*=%d j*=%d\n", time_value,
-                       ii, jj, sq_i, sq_j);
-            }
-            x = A + sq_i * HX;
-            y = C + sq_j * HY;
-
-            // formula 4
-            double dens_4 = density[sq_i * OY_LEN_1 + sq_j] * (1 - (real_x - x) / HX) * (1 - (real_y - y) / HY)
-                            + density[(sq_i + 1) * OY_LEN_1 + sq_j] * ((real_x - x) / HX) * (1 - (real_y - y) / HY)
-                            + density[(sq_i + 1) * OY_LEN_1 + sq_j + 1] * ((real_x - x) / HX) * ((real_y - y) / HY)
-                            + density[sq_i * OY_LEN_1 + sq_j + 1] * (1 - (real_x - x) / HX) * ((real_y - y) / HY);
-
-            phi += (dens_1 + dens_2 + dens_3 + dens_4) * jakob;
-        }
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, xy; A=0, B=1, C=0, D=1!
+            return x * y;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return x * (1. - x) * y;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return x * (1. - y) * y;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return x * (1. - x);
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return y * (1. - y);
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return x * (1. - x) * y * (1. - y);
     }
 
-    phi = 0.25 * phi * mes;
-    if (fabs(phi) < fabs(DBL_MIN_TRIM)) phi = 0;
-
-    return phi;
 }
 
-static double get_phi_integ_midpoint(int ii, int jj, double *density, double time_value) {
-    double x1 = 0.;
-    double y1 = 0.;
-    double x2 = 0.;
-    double y2 = 0.;
-    double x3 = 0.;
-    double y3 = 0.;
-    double x4 = 0.;
-    double y4 = 0.;
+inline static double analytical_slv_x(double x, double y) {
 
-    get_coordinates_on_curr(ii, jj, x1, y1, x2, y2, x3, y3, x4, y4);
-
-//    printf("POINT: %d   %d :  x1=%.8le * y1=%.8le ** x2=%.8le * y2=%.8le ** x3=%.8le * y3=%.8le **
-//                   x4=%.8le * y4=%.8le\n", ii,jj, x1,y1, x2,y2, x3,y3, x4,y4);
-
-    double u = func_u(time_value, x1, y1);
-    double v = func_v(time_value, x1, y1);
-    x1 = x1 - TAU * u;
-    y1 = y1 - TAU * v;
-    u = func_u(time_value, x2, y2);
-    v = func_v(time_value, x2, y2);
-    x2 = x2 - TAU * u;
-    y2 = y2 - TAU * v;
-    u = func_u(time_value, x3, y3);
-    v = func_v(time_value, x3, y3);
-    x3 = x3 - TAU * u;
-    y3 = y3 - TAU * v;
-    u = func_u(time_value, x4, y4);
-    v = func_v(time_value, x4, y4);
-    x4 = x4 - TAU * u;
-    y4 = y4 - TAU * v;
-    /*
-     if (x1 <= A || x1 >= B || x2 <= A || x2 >= B || x3 <= A || x3 >= B || x4 <= A || x4 >= B
-        || y1 <= C || y1 >= D || y2 <= C || y2 >= D || y3 <= C || y3 >= D || y4 <= C || y4 >= D)
-        printf("PREV Time level %.8le! ERROR INDEX i=%d j=%d : x1=%.8le * y1=%.8le ** x2=%.8le * y2=%.8le ** x3=%.8le * y3=%.8le ** "
-                       "x4=%.8le * y4=%.8le\n ", time_value, ii, jj, x1, y1, x2, y2, x3, y3, x4, y4);
-*/
-    int nx = IDEAL_SQ_SIZE_X;
-    int ny = IDEAL_SQ_SIZE_Y;
-
-    double x_step = 1. / nx;
-    double y_step = 1. / ny;
-
-    // get right part for jakoby
-    double phi = 0.;
-    double mes = x_step * y_step;
-    for (int i = 0; i < nx; ++i) {
-        for (int j = 0; j < ny; ++j) {
-
-            double ideal_x = i * x_step + x_step / 2.;
-            double ideal_y = j * y_step + y_step / 2.;
-
-            double real_x = x1 + (x2 - x1) * ideal_x + (x4 - x1) * ideal_y
-                            + (x1 + x3 - x2 - x4) * ideal_x * ideal_y;
-            double real_y = y1 + (y2 - y1) * ideal_x + (y4 - y1) * ideal_y
-                            + (y1 + y3 - y2 - y4) * ideal_x * ideal_y;
-
-            // find out in which square real point was placed
-            int sq_i = (int) ((real_x - A) / HX);
-            int sq_j = (int) ((real_y - C) / HY);
-            double x = A + sq_i * HX;
-            double y = C + sq_j * HY;
-
-            double a11 = (x2 - x1) + (x1 + x3 - x2 - x4) * ideal_y;
-            double a12 = (x4 - x1) + (x1 + x3 - x2 - x4) * ideal_x;
-            double a21 = (y2 - y1) + (y1 + y3 - y2 - y4) * ideal_y;
-            double a22 = (y4 - y1) + (y1 + y3 - y2 - y4) * ideal_x;
-            double jakob = a11 * a22 - a21 * a12;
-
-            // formula 4
-            double dens = density[sq_i * OY_LEN_1 + sq_j] * (1 - (real_x - x) / HX) * (1 - (real_y - y) / HY)
-                          + density[(sq_i + 1) * OY_LEN_1 + sq_j] * ((real_x - x) / HX) * (1 - (real_y - y) / HY)
-                          + density[(sq_i + 1) * OY_LEN_1 + sq_j + 1] * ((real_x - x) / HX) * ((real_y - y) / HY)
-                          + density[sq_i * OY_LEN_1 + sq_j + 1] * (1 - (real_x - x) / HX) * ((real_y - y) / HY);
-
-            phi += mes * dens * jakob;
-        }
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, xy; A=0, B=1, C=0, D=1!
+            return y;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return (1. - 2. * x) * y;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return (1. - y) * y;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return 1. - 2. * x;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return (1. - 2. * x) * y * (1. - y);
     }
 
-    if (fabs(phi) < fabs(DBL_MIN_TRIM)) phi = 0;
-    return phi;
+}
+
+inline static double analytical_slv_y(double x, double y) {
+
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, xy; A=0, B=1, C=0, D=1!
+            return x;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return x * (1. - x);
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return x * (1. - 2. * y);
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return 1. - 2. * y;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return x * (1. - x) *  (1. - 2. * y);
+    }
+
+}
+
+inline static double analytical_slv_xx(double x, double y) {
+
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, A=0, B=1, C=0, D=1!
+            return 0.;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return -2. * y;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return -2.;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return -2. * y * (1. - y);
+    }
+
+}
+
+inline static double analytical_slv_yy(double x, double y) {
+
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, A=0, B=1, C=0, D=1!
+            return 0.;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return -2. * x;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return -2.;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return -2. * x * (1. - x);
+    }
+
+}
+
+inline static double f_rp(double x, double y) {
+
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, A=0, B=1, C=0, D=1!
+            return 0.;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return 2. * y;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return 2. * x;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return 2.;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return 2.;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return 2. * (x * (1. - x) + y * (1. - y));
+    }
+
+}
+
+inline static double f_rp_x(double x, double y) {
+
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, A=0, B=1, C=0, D=1!
+            return 0.;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return 2.;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return 2. * (1. - 2. * x);
+    }
+
+}
+
+inline static double f_rp_y(double x, double y) {
+
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, A=0, B=1, C=0, D=1!
+            return 0.;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return 2.;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return 2. * (1. - 2. * y);
+    }
+
+}
+
+inline static double f_rp_xx(double x, double y) {
+
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, A=0, B=1, C=0, D=1!
+            return 0.;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return -4.;
+    }
+
+}
+
+inline static double f_rp_yy(double x, double y) {
+
+    switch (TYPE_EXACT) {
+        case 0:
+            // BiLinear, A=0, B=1, C=0, D=1!
+            return 0.;
+        case 1:
+            // from P3, xxy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 2:
+            // from P3, xyy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 3:
+            // from P2, xx; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 4:
+            // from P2, yy; A=0, B=1, C=0, D=1!
+            return 0.;
+        case 5:
+            // BiQuadrat, A=0, B=1, C=0, D=1!
+            return -4.;
+    }
+}
+
+double *calc_error_u(double hx, double hy, double *solution) {
+    double *err = new double[XY_LEN];
+    for (int i = 0; i < OX_LEN_1; i++)
+        for (int j = 0; j < OY_LEN_1; j++)
+            err[i * OY_LEN_1 + j] = solution[i * OY_LEN_1 + j]
+                                    - analytical_slv(A + hx * i, C + hy * j);
+    return err;
+}
+
+double *calc_error_u_xx(double hx, double hy, double *solution) {
+    double *err = new double[XY_LEN];
+    for (int i = 0; i < OX_LEN_1; i++)
+        for (int j = 0; j < OY_LEN_1; j++)
+            err[i * OY_LEN_1 + j] = solution[i * OY_LEN_1 + j]
+                                    - analytical_slv_xx(A + hx * i, C + hy * j);
+    return err;
+}
+
+double *calc_error_u_yy(double hx, double hy, double *solution) {
+    double *err = new double[XY_LEN];
+    for (int i = 0; i < OX_LEN_1; i++)
+        for (int j = 0; j < OY_LEN_1; j++)
+            err[i * OY_LEN_1 + j] = solution[i * OY_LEN_1 + j]
+                                    - analytical_slv_yy(A + hx * i, C + hy * j);
+    return err;
+}
+
+inline static double b_phi0(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+
+    return (1. - xx / HX) * (1. - yy / HY);
+}
+
+inline static double b_phi0_x(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+
+    if ((x-xi)<0)
+        return (1. - yy / HY) / HX;
+    else return -(1. - yy / HY) / HX;
+}
+
+inline static double b_phi0_y(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+
+    if ((y-yj)<0)
+        return (1. - xx / HX) / HY;
+    else return -(1. - xx / HX) / HY;
+}
+
+inline static double b_phi1(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+
+    return HX * xx * (1. - xx / HX) * (xx / HX - 2.) * (1. - yy / HY) / 6.;
+}
+
+inline static double b_phi1_x(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+
+    if ((x-xi)>0)
+        return HX * (1. - yy / HY) * (6. * xx / HX - 3. * (xx / HX) * (xx / HX) - 2.) / 6.;
+    else return - HX * (1. - yy / HY) * (6. * xx / HX - 3. * (xx / HX) * (xx / HX) - 2.) / 6.;
+}
+
+inline static double b_phi1_y(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+    double H = HX / HY / 6.;
+
+    if ((y-yj)>0)
+        return - H * xx * (1. - xx / HX) * (xx / HX - 2.);
+    else return H * xx * (1. - xx / HX) * (xx / HX - 2.);
+}
+
+inline static double b_phi2(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+
+    return HY * yy * (1. - yy / HY) * (yy / HY - 2.) * (1. - xx / HX) / 6.;
+}
+
+inline static double b_phi2_x(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+    double H = HY / HX / 6.;
+
+    if ((x-xi)>0)
+        return - H * yy * (1. - yy / HY) * (yy / HY - 2.);
+    else return H * yy * (1. - yy / HY) * (yy / HY - 2.);
+}
+
+inline static double b_phi2_y(double x, double y, int ii, int jj) {
+
+    double xi = A + ii * HX;
+    double yj = C + jj * HY;
+    double xx = fabs(x - xi);
+    double yy = fabs(y - yj);
+
+    if ((y-yj)>0)
+        return HY * (1. - xx / HX) * (6. * yy / HY - 3. * (yy / HY) * (yy / HY) - 2.) / 6.;
+    else return - HY * (1. - xx / HX) * (6. * yy / HY - 3. * (yy / HY) * (yy / HY) - 2.) / 6.;
+}
+
+inline static double u_h_x(double *u_h, double *u_h_xx, double *u_h_yy,
+                           double x, double y, int ii, int jj) {
+
+    double val = u_h[OY_LEN_1 * ii + jj] * b_phi0_x(x, y, ii, jj)
+                 + u_h[OY_LEN_1 * (ii + 1) + jj] * b_phi0_x(x, y, ii + 1, jj)
+                 + u_h[OY_LEN_1 * (ii + 1) + jj + 1] * b_phi0_x(x, y, ii + 1, jj + 1)
+                 + u_h[OY_LEN_1 * ii + jj + 1] * b_phi0_x(x, y, ii, jj + 1)
+                 + u_h_xx[OY_LEN_1 * ii + jj] * b_phi1_x(x, y, ii, jj)
+                 + u_h_xx[OY_LEN_1 * (ii + 1) + jj] * b_phi1_x(x, y, ii + 1, jj)
+                 + u_h_xx[OY_LEN_1 * (ii + 1) + jj + 1] * b_phi1_x(x, y, ii + 1, jj + 1)
+                 + u_h_xx[OY_LEN_1 * ii + jj + 1] * b_phi1_x(x, y, ii, jj + 1)
+                 + u_h_yy[OY_LEN_1 * ii + jj] * b_phi2_x(x, y, ii, jj)
+                 + u_h_yy[OY_LEN_1 * (ii + 1) + jj] * b_phi2_x(x, y, ii + 1, jj)
+                 + u_h_yy[OY_LEN_1 * (ii + 1) + jj + 1] * b_phi2_x(x, y, ii + 1, jj + 1)
+                 + u_h_yy[OY_LEN_1 * ii + jj + 1] * b_phi2_x(x, y, ii, jj + 1);
+    return val;
+}
+
+inline static double u_h_y(double *u_h, double *u_h_xx, double *u_h_yy,
+                           double x, double y, int ii, int jj) {
+
+    double val = u_h[OY_LEN_1 * ii + jj] * b_phi0_y(x, y, ii, jj)
+                 + u_h[OY_LEN_1 * (ii + 1) + jj] * b_phi0_y(x, y, ii + 1, jj)
+                 + u_h[OY_LEN_1 * (ii + 1) + jj + 1] * b_phi0_y(x, y, ii + 1, jj + 1)
+                 + u_h[OY_LEN_1 * ii + jj + 1] * b_phi0_y(x, y, ii, jj + 1)
+                 + u_h_xx[OY_LEN_1 * ii + jj] * b_phi1_y(x, y, ii, jj)
+                 + u_h_xx[OY_LEN_1 * (ii + 1) + jj] * b_phi1_y(x, y, ii + 1, jj)
+                 + u_h_xx[OY_LEN_1 * (ii + 1) + jj + 1] * b_phi1_y(x, y, ii + 1, jj + 1)
+                 + u_h_xx[OY_LEN_1 * ii + jj + 1] * b_phi1_y(x, y, ii, jj + 1)
+                 + u_h_yy[OY_LEN_1 * ii + jj] * b_phi2_y(x, y, ii, jj)
+                 + u_h_yy[OY_LEN_1 * (ii + 1) + jj] * b_phi2_y(x, y, ii + 1, jj)
+                 + u_h_yy[OY_LEN_1 * (ii + 1) + jj + 1] * b_phi2_y(x, y, ii + 1, jj + 1)
+                 + u_h_yy[OY_LEN_1 * ii + jj + 1] * b_phi2_y(x, y, ii, jj + 1);
+    return val;
+}
+
+inline static double Simpson_1D_x(double *u_h, double *u_h_xx, double *u_h_yy,
+                           int i, int j, int ii, int jj) {
+
+    double x1 = A + i * HX;
+    double y1 = C + j * HY;
+    double y2 = C + j * HY + HY / 2.;
+    double y3 = C + (j + 1) * HY;
+
+    double val = HX * (u_h_x(u_h, u_h_xx, u_h_yy, x1, y1, ii, jj) * b_phi1(x1, y1, i, j)
+                 + 4. * u_h_x(u_h, u_h_xx, u_h_yy, x1, y2, ii, jj) * b_phi1(x1, y2, i, j)
+                 + u_h_x(u_h, u_h_xx, u_h_yy, x1, y3, ii, jj) * b_phi1(x1, y3, i, j)) / 6;
+    return val;
+}
+
+inline static double Simpson_1D_y(double *u_h, double *u_h_xx, double *u_h_yy,
+                                  int i, int j, int ii, int jj) {
+
+    double x1 = A + i * HX;
+    double y1 = C + j * HY;
+    double x2 = A + i * HX + HX / 2.;
+    double x3 = A + (i + 1) * HX;
+
+    double val = HY * (u_h_y(u_h, u_h_xx, u_h_yy, x1, y1, ii, jj) * b_phi2(x1, y1, i, j)
+                 + 4. * u_h_y(u_h, u_h_xx, u_h_yy, x2, y1, ii, jj) * b_phi2(x2, y1, i, j)
+                 + u_h_y(u_h, u_h_xx, u_h_yy, x3, y1, ii, jj) * b_phi2(x3, y1, i, j))/ 6.;
+    return val;
+}
+
+
+
+// jj+1 -------------
+//      |     |     |
+//      |  2  |  1  |
+//      |     |     |
+// jj   ------X------
+//      |     |     |
+//      |  3  |  4  |
+//      |     |     |
+// jj-1 |------------               X: (i,j)
+//     ii-1   ii    ii+1
+
+
+inline static double ff_qrule_Simpson(int ii, int jj, int i, int j) {
+
+    double x1 = A + ii * HX;
+    double x2 = A + ii * HX + HX/2.;
+    double x3 = A + (ii+1) * HX;
+    double y1 = C + jj * HY;
+    double y2 = C + jj * HY + HY/2.;
+    double y3 = C + (jj + 1) * HY;
+    double x = A + i * HX;
+    double y = C + j * HY;
+
+
+    double simpson = HX * HY * (  f_rp(x1, y1)*b_phi0(x1, y1, i, j)
+                                + f_rp(x3, y1)*b_phi0(x3, y1, i, j)
+                                + f_rp(x3, y3)*b_phi0(x3, y3, i, j)
+                                + f_rp(x1, y3)*b_phi0(x1, y3, i, j)
+                                + 4. * ( f_rp(x2, y1)*b_phi0(x2, y1, i, j)
+                                       + f_rp(x3, y2)*b_phi0(x3, y2, i, j)
+                                       + f_rp(x2, y3)*b_phi0(x2, y3, i, j)
+                                       + f_rp(x1, y2)*b_phi0(x1, y2, i, j))
+                                + 16.  * f_rp(x2, y2)*b_phi0(x2, y2, i, j)) / 36.;
+
+    return simpson;
+}
+
+inline static double ff_xx_qrule_Simpson(int ii, int jj, int i, int j) {
+
+    double x1 = A + ii * HX;
+    double x2 = A + ii * HX + HX/2.;
+    double x3 = A + (ii+1) * HX;
+    double y1 = C + jj * HY;
+    double y2 = C + jj * HY + HY/2.;
+    double y3 = C + (jj + 1) * HY;
+    double x = A + i * HX;
+    double y = C + j * HY;
+
+
+    double simpson = HX * HY * (  f_rp(x1, y1)*b_phi1(x1, y1, i, j)
+                                  + f_rp(x3, y1)*b_phi1(x3, y1, i, j)
+                                  + f_rp(x3, y3)*b_phi1(x3, y3, i, j)
+                                  + f_rp(x1, y3)*b_phi1(x1, y3, i, j)
+                                  + 4. * ( f_rp(x2, y1)*b_phi1(x2, y1, i, j)
+                                           + f_rp(x3, y2)*b_phi1(x3, y2, i, j)
+                                           + f_rp(x2, y3)*b_phi1(x2, y3, i, j)
+                                           + f_rp(x1, y2)*b_phi1(x1, y2, i, j))
+                                  + 16.  * f_rp(x2, y2)*b_phi1(x2, y2, i, j)) / 36.;
+
+    return simpson;
+}
+
+inline static double ff_yy_qrule_Simpson(int ii, int jj, int i, int j) {
+
+    double x1 = A + ii * HX;
+    double x2 = A + ii * HX + HX/2.;
+    double x3 = A + (ii+1) * HX;
+    double y1 = C + jj * HY;
+    double y2 = C + jj * HY + HY/2.;
+    double y3 = C + (jj + 1) * HY;
+    double x = A + i * HX;
+    double y = C + j * HY;
+
+
+    double simpson = HX * HY * (  f_rp(x1, y1)*b_phi2(x1, y1, i, j)
+                                  + f_rp(x3, y1)*b_phi2(x3, y1, i, j)
+                                  + f_rp(x3, y3)*b_phi2(x3, y3, i, j)
+                                  + f_rp(x1, y3 )*b_phi2(x1, y3, i, j)
+                                  + 4. * ( f_rp(x2, y1)*b_phi2(x2, y1, i, j)
+                                           + f_rp(x3, y2)*b_phi2(x3, y2, i, j)
+                                           + f_rp(x2, y3)*b_phi2(x2, y3, i, j)
+                                           + f_rp(x1, y2)*b_phi2(x1, y2, i, j))
+                                  + 16.  * f_rp(x2, y2)*b_phi2(x2, y2, i, j)) / 36.;
+
+    return simpson;
+}
+
+
+
+void fill_stencils_u_uxx(double H_SQ, double *stnl_1, double *stnl_2, double *stnl_3) {
+
+    // stansil u --> u for u_xx
+    stnl_1[0] = 16. / 3.;
+    stnl_1[1] = -8. / 3.;
+    stnl_1[2] = -2. / 3.;
+    stnl_1[3] = 4. / 3.;
+    stnl_1[4] = -2. / 3.;
+    stnl_1[5] = -8. / 3.;
+    stnl_1[6] = -2. / 3.;
+    stnl_1[7] = 4. / 3.;
+    stnl_1[8] = -2. / 3.;
+
+    // stansil u --> u_xx for u_xx
+    stnl_2[0] = -2. * H_SQ / 9.;
+    stnl_2[1] = H_SQ / 9.;
+    stnl_2[2] = - H_SQ / 18.;
+    stnl_2[3] = H_SQ / 9.;
+    stnl_2[4] = - H_SQ / 18.;
+    stnl_2[5] = H_SQ / 9.;
+    stnl_2[6] = - H_SQ / 18.;
+    stnl_2[7] = H_SQ / 9.;
+    stnl_2[8] = - H_SQ / 18.;
+
+
+    // stansil u --> u_yy for u_xx
+    stnl_3[0] = -8. * H_SQ / 9.;
+    stnl_3[1] = 4. * H_SQ / 9.;
+    stnl_3[2] = - H_SQ / 18.;
+    stnl_3[3] = H_SQ / 9.;
+    stnl_3[4] = - H_SQ / 18.;
+    stnl_3[5] = 4. * H_SQ / 9.;
+    stnl_3[6] = - H_SQ / 18.;
+    stnl_3[7] = H_SQ / 9.;
+    stnl_3[8] = - H_SQ / 18.;
+
+}
+
+void fill_stencils_uxx_uxx(double H_SQ, double *stnl_1, double *stnl_2, double *stnl_3) {
+
+    double H_SQ_SQ=H_SQ * H_SQ;
+
+
+    // stansil u_xx --> u for u_xx
+    stnl_1[0] = -2. * H_SQ / 9.;
+    stnl_1[1] = H_SQ / 9.;
+    stnl_1[2] = - H_SQ / 18.;
+    stnl_1[3] = H_SQ / 9.;
+    stnl_1[4] = - H_SQ / 18.;
+    stnl_1[5] = H_SQ / 9.;
+    stnl_1[6] = - H_SQ / 18.;
+    stnl_1[7] = H_SQ / 9.;
+    stnl_1[8] = - H_SQ / 18.;
+
+    // stansil u_xx --> u_xx for u_xx
+    stnl_2[0] = -11. * H_SQ_SQ / 27.;
+    stnl_2[1] = 11. * H_SQ_SQ / 54.;
+    stnl_2[2] = H_SQ_SQ / 27.;
+    stnl_2[3] = 5. * H_SQ_SQ / 54.;
+    stnl_2[4] = H_SQ_SQ / 27.;
+    stnl_2[5] = 11. * H_SQ_SQ / 54.;
+    stnl_2[6] = H_SQ_SQ / 27.;
+    stnl_2[7] = 5. * H_SQ_SQ / 54.;
+    stnl_2[8] = H_SQ_SQ / 27.;
+
+    // stansil u_xx --> u_yy for u_xx
+    stnl_3[0] = -2. * H_SQ_SQ / 27.;
+    stnl_3[1] = H_SQ_SQ / 27.;
+    stnl_3[2] = - H_SQ_SQ / 216.;
+    stnl_3[3] = H_SQ_SQ / 108.;
+    stnl_3[4] = - H_SQ_SQ / 216.;
+    stnl_3[5] = H_SQ_SQ / 27.;
+    stnl_3[6] = - H_SQ_SQ / 216.;
+    stnl_3[7] = H_SQ_SQ / 108.;
+    stnl_3[8] = - H_SQ_SQ / 216.;
+
+}
+
+void fill_stencils_uyy_uxx(double H_SQ, double *stnl_1, double *stnl_2, double *stnl_3) {
+
+    double H_SQ_SQ=H_SQ * H_SQ;
+
+    // stansil u_yy --> u for u_xx
+    stnl_1[0] = -8. * H_SQ / 9.;
+    stnl_1[1] = 4. * H_SQ / 9.;
+    stnl_1[2] = - H_SQ / 18.;
+    stnl_1[3] = H_SQ / 9.;
+    stnl_1[4] = - H_SQ / 18.;
+    stnl_1[5] = 4. * H_SQ / 9.;
+    stnl_1[6] = - H_SQ / 18.;
+    stnl_1[7] = H_SQ / 9.;
+    stnl_1[8] = - H_SQ / 18.;
+
+    // stansil u_yy --> u_xx for u_xx
+    stnl_2[0] = -2. * H_SQ_SQ / 27.;
+    stnl_2[1] = H_SQ_SQ / 27.;
+    stnl_2[2] = - H_SQ_SQ / 216.;
+    stnl_2[3] = H_SQ_SQ / 108.;
+    stnl_2[4] = - H_SQ_SQ / 216.;
+    stnl_2[5] = H_SQ_SQ / 27.;
+    stnl_2[6] = - H_SQ_SQ / 216.;
+    stnl_2[7] = H_SQ_SQ / 108.;
+    stnl_2[8] = - H_SQ_SQ / 216.;
+
+    // stansil u_yy --> u_yy for u_xx
+    stnl_3[0] = -5. * H_SQ_SQ / 27.;
+    stnl_3[1] = 5. * H_SQ_SQ / 54.;
+    stnl_3[2] = H_SQ_SQ / 27.;
+    stnl_3[3] = - 2. * H_SQ_SQ / 27.;
+    stnl_3[4] = H_SQ_SQ / 27.;
+    stnl_3[5] = 5. * H_SQ_SQ / 54.;
+    stnl_3[6] = H_SQ_SQ / 27.;
+    stnl_3[7] = - 2. * H_SQ_SQ / 27.;
+    stnl_3[8] = H_SQ_SQ / 27.;
+
+}
+ // !!!!!!!!!!!!!!!!!
+
+void fill_stencils_u_uyy(double H_SQ, double *stnl_1, double *stnl_2, double *stnl_3) {
+
+    // stansil u --> u for u_yy
+    stnl_1[0] = 16. / 3.;
+    stnl_1[1] = 4. / 3.;
+    stnl_1[2] = -2. / 3.;
+    stnl_1[3] = -8. / 3.;
+    stnl_1[4] = -2. / 3.;
+    stnl_1[5] = 4. / 3.;
+    stnl_1[6] = -2. / 3.;
+    stnl_1[7] = -8. / 3.;
+    stnl_1[8] = -2. / 3.;
+
+    // stansil u --> u_xx for u_yy
+    stnl_2[0] = -8. * H_SQ / 9.;
+    stnl_2[1] = H_SQ / 9.;
+    stnl_2[2] = - H_SQ / 18.;
+    stnl_2[3] = 4. * H_SQ / 9.;
+    stnl_2[4] = - H_SQ / 18.;
+    stnl_2[5] = H_SQ / 9.;
+    stnl_2[6] = - H_SQ / 18.;
+    stnl_2[7] = 4. * H_SQ / 9.;
+    stnl_2[8] = - H_SQ / 18.;
+
+    // stansil u --> u_yy for u_yy
+    stnl_3[0] = -2. * H_SQ / 9.;
+    stnl_3[1] = H_SQ / 9.;
+    stnl_3[2] = - H_SQ / 18.;
+    stnl_3[3] = H_SQ / 9.;
+    stnl_3[4] = - H_SQ / 18.;
+    stnl_3[5] = H_SQ / 9.;
+    stnl_3[6] = - H_SQ / 18.;
+    stnl_3[7] = H_SQ / 9.;
+    stnl_3[8] = - H_SQ / 18.;
+
+
+
+}
+
+void fill_stencils_uxx_uyy(double H_SQ, double *stnl_1, double *stnl_2, double *stnl_3) {
+
+    double H_SQ_SQ=H_SQ * H_SQ;
+
+    // stansil u_xx --> u for u_yy
+    stnl_1[0] = -8. * H_SQ / 9.;
+    stnl_1[1] = H_SQ / 9.;
+    stnl_1[2] = - H_SQ / 18.;
+    stnl_1[3] = 4. * H_SQ / 9.;
+    stnl_1[4] = - H_SQ / 18.;
+    stnl_1[5] = H_SQ / 9.;
+    stnl_1[6] = - H_SQ / 18.;
+    stnl_1[7] = 4. * H_SQ / 9.;
+    stnl_1[8] = - H_SQ / 18.;
+
+    // stansil u_xx --> u_xx for u_yy
+    stnl_2[0] = -5. * H_SQ_SQ / 27.;
+    stnl_2[1] = -2. * H_SQ_SQ / 27.;
+    stnl_2[2] = H_SQ_SQ / 27.;
+    stnl_2[3] = 5. * H_SQ_SQ / 54.;
+    stnl_2[4] = H_SQ_SQ / 27.;
+    stnl_2[5] = -2. * H_SQ_SQ / 27.;
+    stnl_2[6] = H_SQ_SQ / 27.;
+    stnl_2[7] = 5. * H_SQ_SQ / 54.;
+    stnl_2[8] = H_SQ_SQ / 27.;
+
+    // stansil u_xx --> u_yy for u_yy
+    stnl_3[0] = -2. * H_SQ_SQ / 27.;
+    stnl_3[1] = H_SQ_SQ / 108.;
+    stnl_3[2] = - H_SQ_SQ / 216.;
+    stnl_3[3] = H_SQ_SQ / 27.;
+    stnl_3[4] = - H_SQ_SQ / 216.;
+    stnl_3[5] = H_SQ_SQ / 108.;
+    stnl_3[6] = - H_SQ_SQ / 216.;
+    stnl_3[7] = H_SQ_SQ / 27.;
+    stnl_3[8] = - H_SQ_SQ / 216.;
+
+}
+
+void fill_stencils_uyy_uyy(double H_SQ, double *stnl_1, double *stnl_2, double *stnl_3) {
+
+    double H_SQ_SQ=H_SQ * H_SQ;
+
+    // stansil u_yy --> u for u_xx
+    stnl_1[0] = -2. * H_SQ / 9.;
+    stnl_1[1] = H_SQ / 9.;
+    stnl_1[2] = - H_SQ / 18.;
+    stnl_1[3] = H_SQ / 9.;
+    stnl_1[4] = - H_SQ / 18.;
+    stnl_1[5] = H_SQ / 9.;
+    stnl_1[6] = - H_SQ / 18.;
+    stnl_1[7] = H_SQ / 9.;
+    stnl_1[8] = - H_SQ / 18.;
+
+    // stansil u_yy --> u_xx for u_xx
+    stnl_2[0] = -2. * H_SQ_SQ / 27.;
+    stnl_2[1] = H_SQ_SQ / 108.;
+    stnl_2[2] = - H_SQ_SQ / 216.;
+    stnl_2[3] = H_SQ_SQ / 27.;
+    stnl_2[4] = - H_SQ_SQ / 216.;
+    stnl_2[5] = H_SQ_SQ / 108.;
+    stnl_2[6] = - H_SQ_SQ / 216.;
+    stnl_2[7] = H_SQ_SQ / 27.;
+    stnl_2[8] = - H_SQ_SQ / 216.;
+
+    // stansil u_yy --> u_yy for u_xx
+    stnl_3[0] = -11. * H_SQ_SQ / 27.;
+    stnl_3[1] = 5. * H_SQ_SQ / 54.;
+    stnl_3[2] = H_SQ_SQ / 27.;
+    stnl_3[3] = 11. * H_SQ_SQ / 54.;
+    stnl_3[4] = H_SQ_SQ / 27.;
+    stnl_3[5] = 5. * H_SQ_SQ / 54.;
+    stnl_3[6] = H_SQ_SQ / 27.;
+    stnl_3[7] = 11. * H_SQ_SQ / 54.;
+    stnl_3[8] = H_SQ_SQ / 27.;
+
+}
+
+
+double Residual_u(double *res_u, double *u, double *u_xx, double *u_yy, double *rp, int flag)
+{
+    double *st_11_u_xx = new double[9]; // the 1st equation, u for u_xx
+    double *st_12_u_xx = new double[9]; // the 1st equation, u_xx for u_xx
+    double *st_13_u_xx = new double[9]; // the 1st equation, u_yy for u_xx
+
+    double *st_11_u_yy = new double[9]; // the 1st equation, u for u_yy
+    double *st_12_u_yy = new double[9]; // the 1st equation, u_xx for u_yy
+    double *st_13_u_yy = new double[9]; // the 1st equation, u_yy for u_yy
+
+    double H = HX; // ! let HX = HY
+    double H_SQ = H * H;
+    double H_coef = 1.;
+    if (flag) H_coef = 1. / H;
+
+    fill_stencils_u_uxx(H_SQ, st_11_u_xx, st_12_u_xx, st_13_u_xx);
+    fill_stencils_u_uyy(H_SQ, st_11_u_yy, st_12_u_yy, st_13_u_yy);
+
+    double Res = FLT_MIN;
+
+    // inner points
+    for (int i = 1; i < OX_LEN; ++i)
+        for (int j = 1; j < OY_LEN; ++j) {
+            double val1 = st_11_u_xx[0] * u[OY_LEN_1 * i + j]
+                          + st_11_u_xx[1] * u[OY_LEN_1 * (i + 1) + j]
+                          + st_11_u_xx[2] * u[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_11_u_xx[3] * u[OY_LEN_1 * i + j + 1]
+                          + st_11_u_xx[4] * u[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_11_u_xx[5] * u[OY_LEN_1 * (i -1) + j]
+                          + st_11_u_xx[6] * u[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_11_u_xx[7] * u[OY_LEN_1 * i + j - 1]
+                          + st_11_u_xx[8] * u[OY_LEN_1 * (i + 1) + j - 1];
+            double val2 = st_12_u_xx[0] * u_xx[OY_LEN_1 * i + j]
+                          + st_12_u_xx[1] * u_xx[OY_LEN_1 * (i + 1) + j]
+                          + st_12_u_xx[2] * u_xx[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_12_u_xx[3] * u_xx[OY_LEN_1 * i + j + 1]
+                          + st_12_u_xx[4] * u_xx[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_12_u_xx[5] * u_xx[OY_LEN_1 * (i -1) + j]
+                          + st_12_u_xx[6] * u_xx[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_12_u_xx[7] * u_xx[OY_LEN_1 * i + j - 1]
+                          + st_12_u_xx[8] * u_xx[OY_LEN_1 * (i + 1) + j - 1];
+            double val3 = st_13_u_xx[0] * u_yy[OY_LEN_1 * i + j]
+                          + st_13_u_xx[1] * u_yy[OY_LEN_1 * (i + 1) + j]
+                          + st_13_u_xx[2] * u_yy[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_13_u_xx[3] * u_yy[OY_LEN_1 * i + j + 1]
+                          + st_13_u_xx[4] * u_yy[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_13_u_xx[5] * u_yy[OY_LEN_1 * (i -1) + j]
+                          + st_13_u_xx[6] * u_yy[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_13_u_xx[7] * u_yy[OY_LEN_1 * i + j - 1]
+                          + st_13_u_xx[8] * u_yy[OY_LEN_1 * (i + 1) + j - 1];
+            double val4 = st_11_u_yy[0] * u[OY_LEN_1 * i + j]
+                          + st_11_u_yy[1] * u[OY_LEN_1 * (i + 1) + j]
+                          + st_11_u_yy[2] * u[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_11_u_yy[3] * u[OY_LEN_1 * i + j + 1]
+                          + st_11_u_yy[4] * u[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_11_u_yy[5] * u[OY_LEN_1 * (i -1) + j]
+                          + st_11_u_yy[6] * u[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_11_u_yy[7] * u[OY_LEN_1 * i + j - 1]
+                          + st_11_u_yy[8] * u[OY_LEN_1 * (i + 1) + j - 1];
+            double val5 = st_12_u_yy[0] * u_xx[OY_LEN_1 * i + j]
+                          + st_12_u_yy[1] * u_xx[OY_LEN_1 * (i + 1) + j]
+                          + st_12_u_yy[2] * u_xx[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_12_u_yy[3] * u_xx[OY_LEN_1 * i + j + 1]
+                          + st_12_u_yy[4] * u_xx[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_12_u_yy[5] * u_xx[OY_LEN_1 * (i -1) + j]
+                          + st_12_u_yy[6] * u_xx[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_12_u_yy[7] * u_xx[OY_LEN_1 * i + j - 1]
+                          + st_12_u_yy[8] * u_xx[OY_LEN_1 * (i + 1) + j - 1];
+            double val6 = st_13_u_yy[0] * u_yy[OY_LEN_1 * i + j]
+                          + st_13_u_yy[1] * u_yy[OY_LEN_1 * (i + 1) + j]
+                          + st_13_u_yy[2] * u_yy[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_13_u_yy[3] * u_yy[OY_LEN_1 * i + j + 1]
+                          + st_13_u_yy[4] * u_yy[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_13_u_yy[5] * u_yy[OY_LEN_1 * (i -1) + j]
+                          + st_13_u_yy[6] * u_yy[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_13_u_yy[7] * u_yy[OY_LEN_1 * i + j - 1]
+                          + st_13_u_yy[8] * u_yy[OY_LEN_1 * (i + 1) + j - 1];
+
+            res_u[OY_LEN_1 * i + j] = 0.25 *(val1 + val2 + val3 + val4 + val5 + val6)
+                                      - rp[OY_LEN_1 * i + j];
+
+            double val = fabs(res_u[i * OY_LEN_1 + j]);
+            if (val > Res) Res = val;
+        }
+
+    return Res;
+}
+
+double Residual_u_xx(double *res_u_xx, double *u, double *u_xx, double *u_yy, double *rp, int flag)
+{
+    double *st_11_u_xx = new double[9]; // the 1st equation, u for u_xx
+    double *st_12_u_xx = new double[9]; // the 1st equation, u_xx for u_xx
+    double *st_13_u_xx = new double[9]; // the 1st equation, u_yy for u_xx
+
+    double *st_11_u_yy = new double[9]; // the 1st equation, u for u_yy
+    double *st_12_u_yy = new double[9]; // the 1st equation, u_xx for u_yy
+    double *st_13_u_yy = new double[9]; // the 1st equation, u_yy for u_yy
+
+    double H = HX; // ! let HX = HY
+    double H_SQ = H * H;
+    double H_coef = 1.;
+    if (flag) H_coef = 1. / H;
+
+    fill_stencils_uxx_uxx(H_SQ, st_11_u_xx, st_12_u_xx, st_13_u_xx);
+    fill_stencils_uxx_uyy(H_SQ, st_11_u_yy, st_12_u_yy, st_13_u_yy);
+
+    double Res = FLT_MIN;
+
+    // inner points
+    for (int i = 1; i < OX_LEN; ++i)
+        for (int j = 1; j < OY_LEN; ++j) {
+            double val1 = st_11_u_xx[0] * u[OY_LEN_1 * i + j]
+                          + st_11_u_xx[1] * u[OY_LEN_1 * (i + 1) + j]
+                          + st_11_u_xx[2] * u[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_11_u_xx[3] * u[OY_LEN_1 * i + j + 1]
+                          + st_11_u_xx[4] * u[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_11_u_xx[5] * u[OY_LEN_1 * (i -1) + j]
+                          + st_11_u_xx[6] * u[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_11_u_xx[7] * u[OY_LEN_1 * i + j - 1]
+                          + st_11_u_xx[8] * u[OY_LEN_1 * (i + 1) + j - 1];
+            double val2 = st_12_u_xx[0] * u_xx[OY_LEN_1 * i + j]
+                          + st_12_u_xx[1] * u_xx[OY_LEN_1 * (i + 1) + j]
+                          + st_12_u_xx[2] * u_xx[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_12_u_xx[3] * u_xx[OY_LEN_1 * i + j + 1]
+                          + st_12_u_xx[4] * u_xx[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_12_u_xx[5] * u_xx[OY_LEN_1 * (i -1) + j]
+                          + st_12_u_xx[6] * u_xx[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_12_u_xx[7] * u_xx[OY_LEN_1 * i + j - 1]
+                          + st_12_u_xx[8] * u_xx[OY_LEN_1 * (i + 1) + j - 1];
+            double val3 = st_13_u_xx[0] * u_yy[OY_LEN_1 * i + j]
+                          + st_13_u_xx[1] * u_yy[OY_LEN_1 * (i + 1) + j]
+                          + st_13_u_xx[2] * u_yy[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_13_u_xx[3] * u_yy[OY_LEN_1 * i + j + 1]
+                          + st_13_u_xx[4] * u_yy[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_13_u_xx[5] * u_yy[OY_LEN_1 * (i -1) + j]
+                          + st_13_u_xx[6] * u_yy[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_13_u_xx[7] * u_yy[OY_LEN_1 * i + j - 1]
+                          + st_13_u_xx[8] * u_yy[OY_LEN_1 * (i + 1) + j - 1];
+            double val4 = st_11_u_yy[0] * u[OY_LEN_1 * i + j]
+                          + st_11_u_yy[1] * u[OY_LEN_1 * (i + 1) + j]
+                          + st_11_u_yy[2] * u[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_11_u_yy[3] * u[OY_LEN_1 * i + j + 1]
+                          + st_11_u_yy[4] * u[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_11_u_yy[5] * u[OY_LEN_1 * (i -1) + j]
+                          + st_11_u_yy[6] * u[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_11_u_yy[7] * u[OY_LEN_1 * i + j - 1]
+                          + st_11_u_yy[8] * u[OY_LEN_1 * (i + 1) + j - 1];
+            double val5 = st_12_u_yy[0] * u_xx[OY_LEN_1 * i + j]
+                          + st_12_u_yy[1] * u_xx[OY_LEN_1 * (i + 1) + j]
+                          + st_12_u_yy[2] * u_xx[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_12_u_yy[3] * u_xx[OY_LEN_1 * i + j + 1]
+                          + st_12_u_yy[4] * u_xx[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_12_u_yy[5] * u_xx[OY_LEN_1 * (i -1) + j]
+                          + st_12_u_yy[6] * u_xx[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_12_u_yy[7] * u_xx[OY_LEN_1 * i + j - 1]
+                          + st_12_u_yy[8] * u_xx[OY_LEN_1 * (i + 1) + j - 1];
+            double val6 = st_13_u_yy[0] * u_yy[OY_LEN_1 * i + j]
+                          + st_13_u_yy[1] * u_yy[OY_LEN_1 * (i + 1) + j]
+                          + st_13_u_yy[2] * u_yy[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_13_u_yy[3] * u_yy[OY_LEN_1 * i + j + 1]
+                          + st_13_u_yy[4] * u_yy[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_13_u_yy[5] * u_yy[OY_LEN_1 * (i -1) + j]
+                          + st_13_u_yy[6] * u_yy[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_13_u_yy[7] * u_yy[OY_LEN_1 * i + j - 1]
+                          + st_13_u_yy[8] * u_yy[OY_LEN_1 * (i + 1) + j - 1];
+
+            res_u_xx[OY_LEN_1 * i + j] = 0.25 *(val1 + val2 + val3 + val4 + val5 + val6)
+                                         - rp[OY_LEN_1 * i + j];
+
+            double val = fabs(res_u_xx[i * OY_LEN_1 + j]);
+            if (val > Res) Res = val;
+        }
+
+    // G2 -- (OX_LEN=B, y_j) -- right boundary
+    // G4 -- (0=A, y_j) -- left boundary
+    for (int j = 1; j < OY_LEN; ++j) {
+
+        double val1 = st_11_u_xx[0] * u[OY_LEN_1 * OX_LEN + j] / 2.
+                      + st_11_u_xx[3] * u[OY_LEN_1 * OX_LEN + j + 1] / 2.
+                      + st_11_u_xx[4] * u[OY_LEN_1 * (OX_LEN - 1) + j + 1]
+                      + st_11_u_xx[5] * u[OY_LEN_1 * (OX_LEN -1) + j]
+                      + st_11_u_xx[6] * u[OY_LEN_1 * (OX_LEN - 1) + j - 1]
+                      + st_11_u_xx[7] * u[OY_LEN_1 * OX_LEN + j - 1] / 2.;
+        double val2 = st_12_u_xx[0] * u_xx[OY_LEN_1 * OX_LEN + j] / 2.
+                      + st_12_u_xx[3] * u_xx[OY_LEN_1 * OX_LEN + j + 1] / 2.
+                      + st_12_u_xx[4] * u_xx[OY_LEN_1 * (OX_LEN - 1) + j + 1]
+                      + st_12_u_xx[5] * u_xx[OY_LEN_1 * (OX_LEN -1) + j]
+                      + st_12_u_xx[6] * u_xx[OY_LEN_1 * (OX_LEN - 1) + j - 1]
+                      + st_12_u_xx[7] * u_xx[OY_LEN_1 * OX_LEN + j - 1] / 2.;
+        double val3 = st_13_u_xx[0] * u_yy[OY_LEN_1 * OX_LEN + j] / 2.
+                      + st_13_u_xx[3] * u_yy[OY_LEN_1 * OX_LEN + j + 1] / 2.
+                      + st_13_u_xx[4] * u_yy[OY_LEN_1 * (OX_LEN - 1) + j + 1]
+                      + st_13_u_xx[5] * u_yy[OY_LEN_1 * (OX_LEN -1) + j]
+                      + st_13_u_xx[6] * u_yy[OY_LEN_1 * (OX_LEN - 1) + j - 1]
+                      + st_13_u_xx[7] * u_yy[OY_LEN_1 * OX_LEN + j - 1] / 2.;
+        double val4 = st_11_u_yy[0] * u[OY_LEN_1 * OX_LEN + j] / 2.
+                      + st_11_u_yy[3] * u[OY_LEN_1 * OX_LEN + j + 1] / 2.
+                      + st_11_u_yy[4] * u[OY_LEN_1 * (OX_LEN - 1) + j + 1]
+                      + st_11_u_yy[5] * u[OY_LEN_1 * (OX_LEN -1) + j]
+                      + st_11_u_yy[6] * u[OY_LEN_1 * (OX_LEN - 1) + j - 1]
+                      + st_11_u_yy[7] * u[OY_LEN_1 * OX_LEN + j - 1] / 2.;
+        double val5 = st_12_u_yy[0] * u_xx[OY_LEN_1 * OX_LEN + j] / 2.
+                      + st_12_u_yy[3] * u_xx[OY_LEN_1 * OX_LEN + j + 1] / 2.
+                      + st_12_u_yy[4] * u_xx[OY_LEN_1 * (OX_LEN - 1) + j + 1]
+                      + st_12_u_yy[5] * u_xx[OY_LEN_1 * (OX_LEN -1) + j]
+                      + st_12_u_yy[6] * u_xx[OY_LEN_1 * (OX_LEN - 1) + j - 1]
+                      + st_12_u_yy[7] * u_xx[OY_LEN_1 * OX_LEN + j - 1] / 2.;
+        double val6 = st_13_u_yy[0] * u_yy[OY_LEN_1 * OX_LEN + j] / 2.
+                      + st_13_u_yy[3] * u_yy[OY_LEN_1 * OX_LEN + j + 1] / 2.
+                      + st_13_u_yy[4] * u_yy[OY_LEN_1 * (OX_LEN - 1) + j + 1]
+                      + st_13_u_yy[5] * u_yy[OY_LEN_1 * (OX_LEN -1) + j]
+                      + st_13_u_yy[6] * u_yy[OY_LEN_1 * (OX_LEN - 1) + j - 1]
+                      + st_13_u_yy[7] * u_yy[OY_LEN_1 * OX_LEN + j - 1] / 2.;
+
+        double val7 = Simpson_1D_x(u, u_xx, u_yy, OX_LEN, j, OX_LEN - 1, j)
+                      + Simpson_1D_x(u, u_xx, u_yy, OX_LEN, j, OX_LEN - 1, j - 1);
+
+        res_u_xx[OY_LEN_1 * OX_LEN + j] = 0.25 *(val1 + val2 + val3 + val4 + val5 + val6) - val7
+                                          - rp[OY_LEN_1 * OX_LEN + j];
+
+        double val = fabs(res_u_xx[OY_LEN_1 * OX_LEN + j]);
+        if (val > Res) Res = val;
+
+
+        val1 = st_11_u_xx[0] * u[j] / 2.
+                      + st_11_u_xx[1] * u[OY_LEN_1 + j]
+                      + st_11_u_xx[2] * u[OY_LEN_1 + j + 1]
+                      + st_11_u_xx[3] * u[j + 1] / 2.
+                      + st_11_u_xx[7] * u[j - 1] / 2.
+                      + st_11_u_xx[8] * u[OY_LEN_1 + j - 1];
+        val2 = st_12_u_xx[0] * u_xx[j] / 2.
+                      + st_12_u_xx[1] * u_xx[OY_LEN_1 + j]
+                      + st_12_u_xx[2] * u_xx[OY_LEN_1 + j + 1]
+                      + st_12_u_xx[3] * u_xx[j + 1] / 2.
+                      + st_12_u_xx[7] * u_xx[j - 1] / 2.
+                      + st_12_u_xx[8] * u_xx[OY_LEN_1 + j - 1];
+        val3 = st_13_u_xx[0] * u_yy[j] / 2.
+                      + st_13_u_xx[1] * u_yy[OY_LEN_1 + j]
+                      + st_13_u_xx[2] * u_yy[OY_LEN_1 + j + 1]
+                      + st_13_u_xx[3] * u_yy[j + 1] / 2.
+                      + st_13_u_xx[7] * u_yy[j - 1] / 2.
+                      + st_13_u_xx[8] * u_yy[OY_LEN_1 + j - 1];
+        val4 = st_11_u_yy[0] * u[j] / 2.
+                      + st_11_u_yy[1] * u[OY_LEN_1 + j]
+                      + st_11_u_yy[2] * u[OY_LEN_1 + j + 1]
+                      + st_11_u_yy[3] * u[j + 1] / 2.
+                      + st_11_u_yy[7] * u[j - 1] / 2.
+                      + st_11_u_yy[8] * u[OY_LEN_1 + j - 1];
+        val5 = st_12_u_yy[0] * u_xx[j] / 2.
+                      + st_12_u_yy[1] * u_xx[OY_LEN_1 + j]
+                      + st_12_u_yy[2] * u_xx[OY_LEN_1 + j + 1]
+                      + st_12_u_yy[3] * u_xx[j + 1] / 2.
+                      + st_12_u_yy[7] * u_xx[j - 1] / 2.
+                      + st_12_u_yy[8] * u_xx[OY_LEN_1 + j - 1];
+        val6 = st_13_u_yy[0] * u_yy[j] / 2.
+                      + st_13_u_yy[1] * u_yy[OY_LEN_1 + j]
+                      + st_13_u_yy[2] * u_yy[OY_LEN_1 + j + 1]
+                      + st_13_u_yy[3] * u_yy[j + 1] / 2.
+                      + st_13_u_yy[7] * u_yy[j - 1] / 2.
+                      + st_13_u_yy[8] * u_yy[OY_LEN_1 + j - 1];
+
+        val7 = Simpson_1D_x(u, u_xx, u_yy, 0, j, 0, j)
+               + Simpson_1D_x(u, u_xx, u_yy, 0, j, 0, j-1);
+
+        res_u_xx[j] = 0.25 *(val1 + val2 + val3 + val4 + val5 + val6) + val7 - rp[j];
+
+        val = fabs(res_u_xx[j]);
+        if (val > Res) Res = val;
+    }
+
+    return Res;
+}
+
+double Residual_u_yy(double *res_u_yy, double *u, double *u_xx, double *u_yy, double *rp, int flag)
+{
+    double *st_11_u_xx = new double[9]; // the 1st equation, u for u_xx
+    double *st_12_u_xx = new double[9]; // the 1st equation, u_xx for u_xx
+    double *st_13_u_xx = new double[9]; // the 1st equation, u_yy for u_xx
+
+    double *st_11_u_yy = new double[9]; // the 1st equation, u for u_yy
+    double *st_12_u_yy = new double[9]; // the 1st equation, u_xx for u_yy
+    double *st_13_u_yy = new double[9]; // the 1st equation, u_yy for u_yy
+
+    double H = HX; // ! let HX = HY
+    double H_SQ = H * H;
+    double H_coef = 1.;
+    if (flag) H_coef = 1. / H;
+
+    fill_stencils_uyy_uxx(H_SQ, st_11_u_xx, st_12_u_xx, st_13_u_xx);
+    fill_stencils_uyy_uyy(H_SQ, st_11_u_yy, st_12_u_yy, st_13_u_yy);
+
+    double Res = FLT_MIN;
+
+    // inner points
+    for (int i = 1; i < OX_LEN; ++i)
+        for (int j = 1; j < OY_LEN; ++j) {
+            double val1 = st_11_u_xx[0] * u[OY_LEN_1 * i + j]
+                          + st_11_u_xx[1] * u[OY_LEN_1 * (i + 1) + j]
+                          + st_11_u_xx[2] * u[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_11_u_xx[3] * u[OY_LEN_1 * i + j + 1]
+                          + st_11_u_xx[4] * u[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_11_u_xx[5] * u[OY_LEN_1 * (i -1) + j]
+                          + st_11_u_xx[6] * u[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_11_u_xx[7] * u[OY_LEN_1 * i + j - 1]
+                          + st_11_u_xx[8] * u[OY_LEN_1 * (i + 1) + j - 1];
+            double val2 = st_12_u_xx[0] * u_xx[OY_LEN_1 * i + j]
+                          + st_12_u_xx[1] * u_xx[OY_LEN_1 * (i + 1) + j]
+                          + st_12_u_xx[2] * u_xx[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_12_u_xx[3] * u_xx[OY_LEN_1 * i + j + 1]
+                          + st_12_u_xx[4] * u_xx[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_12_u_xx[5] * u_xx[OY_LEN_1 * (i -1) + j]
+                          + st_12_u_xx[6] * u_xx[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_12_u_xx[7] * u_xx[OY_LEN_1 * i + j - 1]
+                          + st_12_u_xx[8] * u_xx[OY_LEN_1 * (i + 1) + j - 1];
+            double val3 = st_13_u_xx[0] * u_yy[OY_LEN_1 * i + j]
+                          + st_13_u_xx[1] * u_yy[OY_LEN_1 * (i + 1) + j]
+                          + st_13_u_xx[2] * u_yy[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_13_u_xx[3] * u_yy[OY_LEN_1 * i + j + 1]
+                          + st_13_u_xx[4] * u_yy[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_13_u_xx[5] * u_yy[OY_LEN_1 * (i -1) + j]
+                          + st_13_u_xx[6] * u_yy[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_13_u_xx[7] * u_yy[OY_LEN_1 * i + j - 1]
+                          + st_13_u_xx[8] * u_yy[OY_LEN_1 * (i + 1) + j - 1];
+            double val4 = st_11_u_yy[0] * u[OY_LEN_1 * i + j]
+                          + st_11_u_yy[1] * u[OY_LEN_1 * (i + 1) + j]
+                          + st_11_u_yy[2] * u[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_11_u_yy[3] * u[OY_LEN_1 * i + j + 1]
+                          + st_11_u_yy[4] * u[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_11_u_yy[5] * u[OY_LEN_1 * (i -1) + j]
+                          + st_11_u_yy[6] * u[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_11_u_yy[7] * u[OY_LEN_1 * i + j - 1]
+                          + st_11_u_yy[8] * u[OY_LEN_1 * (i + 1) + j - 1];
+            double val5 = st_12_u_yy[0] * u_xx[OY_LEN_1 * i + j]
+                          + st_12_u_yy[1] * u_xx[OY_LEN_1 * (i + 1) + j]
+                          + st_12_u_yy[2] * u_xx[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_12_u_yy[3] * u_xx[OY_LEN_1 * i + j + 1]
+                          + st_12_u_yy[4] * u_xx[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_12_u_yy[5] * u_xx[OY_LEN_1 * (i -1) + j]
+                          + st_12_u_yy[6] * u_xx[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_12_u_yy[7] * u_xx[OY_LEN_1 * i + j - 1]
+                          + st_12_u_yy[8] * u_xx[OY_LEN_1 * (i + 1) + j - 1];
+            double val6 = st_13_u_yy[0] * u_yy[OY_LEN_1 * i + j]
+                          + st_13_u_yy[1] * u_yy[OY_LEN_1 * (i + 1) + j]
+                          + st_13_u_yy[2] * u_yy[OY_LEN_1 * (i + 1) + j + 1]
+                          + st_13_u_yy[3] * u_yy[OY_LEN_1 * i + j + 1]
+                          + st_13_u_yy[4] * u_yy[OY_LEN_1 * (i - 1) + j + 1]
+                          + st_13_u_yy[5] * u_yy[OY_LEN_1 * (i -1) + j]
+                          + st_13_u_yy[6] * u_yy[OY_LEN_1 * (i - 1) + j - 1]
+                          + st_13_u_yy[7] * u_yy[OY_LEN_1 * i + j - 1]
+                          + st_13_u_yy[8] * u_yy[OY_LEN_1 * (i + 1) + j - 1];
+
+            res_u_yy[OY_LEN_1 * i + j] = 0.25 *(val1 + val2 + val3 + val4 + val5 + val6)
+                                         - rp[OY_LEN_1 * i + j];
+
+
+            double val = fabs(res_u_yy[i * OY_LEN_1 + j]);
+            if (val > Res) Res = val;
+        }
+
+    // G1 -- (x_i, 0=C) -- bottom boundary
+    // G3 -- (x_i, OY_LEN=D) -- top boundary
+    for (int i = 1; i < OX_LEN; ++i) {
+        double val1 = st_11_u_xx[0] * u[OY_LEN_1 * i] / 2.
+                      + st_11_u_xx[1] * u[OY_LEN_1 * (i + 1)] / 2.
+                      + st_11_u_xx[2] * u[OY_LEN_1 * (i + 1) + 1]
+                      + st_11_u_xx[3] * u[OY_LEN_1 * i + 1]
+                      + st_11_u_xx[4] * u[OY_LEN_1 * (i - 1) + 1]
+                      + st_11_u_xx[5] * u[OY_LEN_1 * (i -1)] / 2.;
+        double val2 = st_12_u_xx[0] * u_xx[OY_LEN_1 * i] / 2.
+                      + st_12_u_xx[1] * u_xx[OY_LEN_1 * (i + 1)] / 2.
+                      + st_12_u_xx[2] * u_xx[OY_LEN_1 * (i + 1) + 1]
+                      + st_12_u_xx[3] * u_xx[OY_LEN_1 * i + 1]
+                      + st_12_u_xx[4] * u_xx[OY_LEN_1 * (i - 1) + 1]
+                      + st_12_u_xx[5] * u_xx[OY_LEN_1 * (i -1)] / 2.;
+        double val3 = st_13_u_xx[0] * u_yy[OY_LEN_1 * i] / 2.
+                      + st_13_u_xx[1] * u_yy[OY_LEN_1 * (i + 1)] / 2.
+                      + st_13_u_xx[2] * u_yy[OY_LEN_1 * (i + 1) + 1]
+                      + st_13_u_xx[3] * u_yy[OY_LEN_1 * i + 1]
+                      + st_13_u_xx[4] * u_yy[OY_LEN_1 * (i - 1) + 1]
+                      + st_13_u_xx[5] * u_yy[OY_LEN_1 * (i -1)] / 2.;
+        double val4 = st_11_u_yy[0] * u[OY_LEN_1 * i] / 2.
+                      + st_11_u_yy[1] * u[OY_LEN_1 * (i + 1)] / 2.
+                      + st_11_u_yy[2] * u[OY_LEN_1 * (i + 1) + 1]
+                      + st_11_u_yy[3] * u[OY_LEN_1 * i + 1]
+                      + st_11_u_yy[4] * u[OY_LEN_1 * (i - 1) + 1]
+                      + st_11_u_yy[5] * u[OY_LEN_1 * (i -1)] / 2.;
+        double val5 = st_12_u_yy[0] * u_xx[OY_LEN_1 * i] / 2.
+                      + st_12_u_yy[1] * u_xx[OY_LEN_1 * (i + 1)] / 2.
+                      + st_12_u_yy[2] * u_xx[OY_LEN_1 * (i + 1) + 1]
+                      + st_12_u_yy[3] * u_xx[OY_LEN_1 * i + 1]
+                      + st_12_u_yy[4] * u_xx[OY_LEN_1 * (i - 1) + 1]
+                      + st_12_u_yy[5] * u_xx[OY_LEN_1 * (i -1)] / 2.;
+        double val6 = st_13_u_yy[0] * u_yy[OY_LEN_1 * i] / 2.
+                      + st_13_u_yy[1] * u_yy[OY_LEN_1 * (i + 1)] / 2.
+                      + st_13_u_yy[2] * u_yy[OY_LEN_1 * (i + 1) + 1]
+                      + st_13_u_yy[3] * u_yy[OY_LEN_1 * i + 1]
+                      + st_13_u_yy[4] * u_yy[OY_LEN_1 * (i - 1) + 1]
+                      + st_13_u_yy[5] * u_yy[OY_LEN_1 * (i - 1)] / 2.;
+
+        double val7 = Simpson_1D_y(u, u_xx, u_yy, i, 0, i, 0)
+                      + Simpson_1D_y(u, u_xx, u_yy, i-1, 0, i, 0);
+
+        res_u_yy[OY_LEN_1 * i] = 0.25 *(val1 + val2 + val3 + val4 + val5 + val6) + val7
+                                 - rp[OY_LEN_1 * i];
+
+        double val = fabs(res_u_yy[i * OY_LEN_1]);
+        if (val > Res) Res = val;
+
+
+        val1 = st_11_u_xx[0] * u[OY_LEN_1 * i + OY_LEN] / 2.
+               + st_11_u_xx[1] * u[OY_LEN_1 * (i + 1) + OY_LEN] / 2.
+               + st_11_u_xx[5] * u[OY_LEN_1 * (i -1) + OY_LEN] / 2.
+               + st_11_u_xx[6] * u[OY_LEN_1 * (i - 1) + OY_LEN - 1]
+               + st_11_u_xx[7] * u[OY_LEN_1 * i + OY_LEN - 1]
+               + st_11_u_xx[8] * u[OY_LEN_1 * (i + 1) + OY_LEN - 1];
+        val2 = st_12_u_xx[0] * u_xx[OY_LEN_1 * i + OY_LEN] / 2.
+               + st_12_u_xx[1] * u_xx[OY_LEN_1 * (i + 1) + OY_LEN] / 2.
+               + st_12_u_xx[5] * u_xx[OY_LEN_1 * (i -1) + OY_LEN] / 2.
+               + st_12_u_xx[6] * u_xx[OY_LEN_1 * (i - 1) + OY_LEN - 1]
+               + st_12_u_xx[7] * u_xx[OY_LEN_1 * i + OY_LEN - 1]
+               + st_12_u_xx[8] * u_xx[OY_LEN_1 * (i + 1) + OY_LEN - 1];
+        val3 = st_13_u_xx[0] * u_yy[OY_LEN_1 * i + OY_LEN] / 2.
+               + st_13_u_xx[1] * u_yy[OY_LEN_1 * (i + 1) + OY_LEN] / 2.
+               + st_13_u_xx[5] * u_yy[OY_LEN_1 * (i -1) + OY_LEN] / 2.
+               + st_13_u_xx[6] * u_yy[OY_LEN_1 * (i - 1) + OY_LEN - 1]
+               + st_13_u_xx[7] * u_yy[OY_LEN_1 * i + OY_LEN - 1]
+               + st_13_u_xx[8] * u_yy[OY_LEN_1 * (i + 1) + OY_LEN - 1];
+        val4 = st_11_u_yy[0] * u[OY_LEN_1 * i + OY_LEN] / 2.
+               + st_11_u_yy[1] * u[OY_LEN_1 * (i + 1) + OY_LEN] / 2.
+               + st_11_u_yy[5] * u[OY_LEN_1 * (i -1) + OY_LEN] / 2.
+               + st_11_u_yy[6] * u[OY_LEN_1 * (i - 1) + OY_LEN - 1]
+               + st_11_u_yy[7] * u[OY_LEN_1 * i + OY_LEN - 1]
+               + st_11_u_yy[8] * u[OY_LEN_1 * (i + 1) + OY_LEN - 1];
+        val5 = st_12_u_yy[0] * u_xx[OY_LEN_1 * i + OY_LEN] / 2.
+               + st_12_u_yy[1] * u_xx[OY_LEN_1 * (i + 1) + OY_LEN] / 2.
+               + st_12_u_yy[5] * u_xx[OY_LEN_1 * (i -1) + OY_LEN] / 2.
+               + st_12_u_yy[6] * u_xx[OY_LEN_1 * (i - 1) + OY_LEN - 1]
+               + st_12_u_yy[7] * u_xx[OY_LEN_1 * i + OY_LEN - 1]
+               + st_12_u_yy[8] * u_xx[OY_LEN_1 * (i + 1) + OY_LEN - 1];
+        val6 = st_13_u_yy[0] * u_yy[OY_LEN_1 * i + OY_LEN] / 2.
+               + st_13_u_yy[1] * u_yy[OY_LEN_1 * (i + 1) + OY_LEN] / 2.
+               + st_13_u_yy[5] * u_yy[OY_LEN_1 * (i -1) + OY_LEN] / 2.
+               + st_13_u_yy[6] * u_yy[OY_LEN_1 * (i - 1) + OY_LEN - 1]
+               + st_13_u_yy[7] * u_yy[OY_LEN_1 * i + OY_LEN - 1]
+               + st_13_u_yy[8] * u_yy[OY_LEN_1 * (i + 1) + OY_LEN - 1];
+
+        val7 = Simpson_1D_y(u, u_xx, u_yy, i, OY_LEN - 1, i, OY_LEN)
+               + Simpson_1D_y(u, u_xx, u_yy, i - 1, OY_LEN - 1, i, OY_LEN);
+
+        res_u_yy[OY_LEN_1 * i + OY_LEN] = 0.25 *(val1 + val2 + val3 + val4 + val5 + val6) - val7
+                                          - rp[OY_LEN_1 * i + OY_LEN];
+
+        val = fabs(res_u_yy[i * OY_LEN_1 + OY_LEN]);
+        if (val > Res) Res = val;
+    }
+
+    return Res;
 }
 
 double *solve_3(double &tme) {
+    double H_coef = 1. / HX;
     StartTimer();
 
     fflush(stdout);
 
     int ic = 0;
-    double *phi = new double[XY_LEN];
-    double *prev_density = new double[XY_LEN];
-    double *density = new double[XY_LEN];
-    double *residual = new double[XY_LEN];
+    double *rp_u = new double[XY_LEN];
+    double *rp_u_xx = new double[XY_LEN];
+    double *rp_u_yy = new double[XY_LEN];
+    double *prev_u = new double[XY_LEN];
+    double *u = new double[XY_LEN];
+    double *prev_u_xx = new double[XY_LEN];
+    double *u_xx = new double[XY_LEN];
+    double *prev_u_yy = new double[XY_LEN];
+    double *u_yy = new double[XY_LEN];
+    double *residual_u = new double[XY_LEN];
+    double *residual_u_xx = new double[XY_LEN];
+    double *residual_u_yy = new double[XY_LEN];
+    double *dif_u = new double[XY_LEN];
+    double *dif_u_xx = new double[XY_LEN];
+    double *dif_u_yy = new double[XY_LEN];
+
+    double *u_exact = new double[XY_LEN];
+    double *u_exact_xx = new double[XY_LEN];
+    double *u_exact_yy = new double[XY_LEN];
+    double *f_u_check = new double[XY_LEN];
+    double *f_u_xx_check = new double[XY_LEN];
+    double *f_u_yy_check = new double[XY_LEN];
+
 
     //<editor-fold desc="Fill initial data">
 
     for (int i = 0; i < OX_LEN_1; ++i) {
         for (int j = 0; j < OY_LEN_1; ++j) {
-            density[OY_LEN_1 * i + j] = 0.;
-            prev_density[OY_LEN_1 * i + j] = 0.;
-            residual[OY_LEN_1 * i + j] = 0.;
-            phi[OY_LEN_1 * i + j] = 0.;
+            u[OY_LEN_1 * i + j] = 0.;
+            u_xx[OY_LEN_1 * i + j] = 0.;
+            u_yy[OY_LEN_1 * i + j] = 0.;
+            prev_u[OY_LEN_1 * i + j] = 0.;
+            prev_u_xx[OY_LEN_1 * i + j] = 0.;
+            prev_u_yy[OY_LEN_1 * i + j] = 0.;
+            residual_u[OY_LEN_1 * i + j] = 0.;
+            residual_u_xx[OY_LEN_1 * i + j] = 0.;
+            residual_u_yy[OY_LEN_1 * i + j] = 0.;
+            rp_u[OY_LEN_1 * i + j] = 0.;
+            rp_u_xx[OY_LEN_1 * i + j] = 0.;
+            rp_u_yy[OY_LEN_1 * i + j] = 0.;
+            dif_u[OY_LEN_1 * i + j] = 0.;
+            dif_u_xx[OY_LEN_1 * i + j] = 0.;
+            dif_u_yy[OY_LEN_1 * i + j] = 0.;
+            u_exact[OY_LEN_1 * i + j] = 0.;
+            u_exact_xx[OY_LEN_1 * i + j] = 0.;
+            u_exact_yy[OY_LEN_1 * i + j] = 0.;
+            f_u_check[OY_LEN_1 * i + j] = 0.;
+            f_u_xx_check[OY_LEN_1 * i + j] = 0.;
+            f_u_yy_check[OY_LEN_1 * i + j] = 0.;
         }
     }
 
     // G1 -- (x_i, 0=C) -- bottom boundary
+    // G3 -- (x_i, OY_LEN=D) -- top boundary
     for (int i = 0; i < OX_LEN_1; ++i) {
-        prev_density[OY_LEN_1 * i] = analytical_solution_circle(0., A + HX * i, C);
-        if (fabs(prev_density[OY_LEN_1 * i]) < fabs(DBL_MIN_TRIM)) prev_density[OY_LEN_1 * i] = 0;
+        u_exact[OY_LEN_1 * i] = analytical_slv(A + HX * i, C);
+        u_exact[OY_LEN_1 * i + OY_LEN] = analytical_slv(A + HX * i, C + HY * OY_LEN);
+        u_exact_xx[OY_LEN_1 * i] = analytical_slv_xx(A + HX * i, C);
+        u_exact_xx[OY_LEN_1 * i + OY_LEN] = analytical_slv_xx(A + HX * i, C + HY * OY_LEN);
+        u_exact_yy[OY_LEN_1 * i] = analytical_slv_yy(A + HX * i, C);
+        u_exact_yy[OY_LEN_1 * i + OY_LEN] = analytical_slv_yy(A + HX * i, C + HY * OY_LEN);
 
+        prev_u[OY_LEN_1 * i] = analytical_slv(A + HX * i, C);
+        prev_u[OY_LEN_1 * i + OY_LEN] = analytical_slv(A + HX * i, C + HY * OY_LEN);
+        prev_u_xx[OY_LEN_1 * i] = analytical_slv_xx(A + HX * i, C);
+        prev_u_xx[OY_LEN_1 * i + OY_LEN] = analytical_slv_xx(A + HX * i, C + HY * OY_LEN);
     }
 
     // G2 -- (OX_LEN=B, y_j) -- right boundary
-    for (int j = 1; j < OY_LEN; ++j) {
-        prev_density[OY_LEN_1 * OX_LEN + j] = analytical_solution_circle(0., A + HX * OX_LEN, C + HY * j);
-        if (fabs(prev_density[OY_LEN_1 * OX_LEN + j]) < fabs(DBL_MIN_TRIM)) prev_density[OY_LEN_1 * OX_LEN + j] = 0;
-
-    }
-
-    // G3 -- (x_i, OY_LEN=D) -- top boundary
-    for (int i = 0; i < OX_LEN_1; ++i) {
-        prev_density[OY_LEN_1 * i + OY_LEN] = analytical_solution_circle(0., A + HX * i, C + HY * OY_LEN);
-        if (fabs(prev_density[OY_LEN_1 * i + OY_LEN]) < fabs(DBL_MIN_TRIM)) prev_density[OY_LEN_1 * i + OY_LEN] = 0;
-
-    }
-
     // G4 -- (0=A, y_j) -- left boundary
-    for (int j = 1; j < OY_LEN; ++j) {
-        prev_density[j] = analytical_solution_circle(0., A, C + HY * j);
-        if (fabs(prev_density[j]) < fabs(DBL_MIN_TRIM)) prev_density[j] = 0;
+    for (int j = 0; j < OY_LEN_1; ++j) {
+        u_exact[OY_LEN_1 * OX_LEN + j] = analytical_slv(A + HX * OX_LEN, C + HY * j);
+        u_exact[j] = analytical_slv(A, C + HY * j);
+        u_exact_xx[OY_LEN_1 * OX_LEN + j] = analytical_slv_xx(A + HX * OX_LEN, C + HY * j);
+        u_exact_xx[j] = analytical_slv_xx(A, C + HY * j);
+        u_exact_yy[OY_LEN_1 * OX_LEN + j] = analytical_slv_yy(A + HX * OX_LEN, C + HY * j);
+        u_exact_yy[j] = analytical_slv_yy(A, C + HY * j);
+
+        prev_u[OY_LEN_1 * OX_LEN + j] = analytical_slv(A + HX * OX_LEN, C + HY * j);
+        prev_u[j] = analytical_slv(A, C + HY * j);
+        prev_u_yy[OY_LEN_1 * OX_LEN + j] = analytical_slv_yy(A + HX * OX_LEN, C + HY * j);
+        prev_u_yy[j] = analytical_slv_yy(A, C + HY * j);
     }
 
-    memcpy(density, prev_density, XY_LEN * sizeof(double));
 
-    // inner points
-    for (int i = 1; i < OX_LEN; ++i) {
+    // to check a residual, inner points are calculated
+    for (int i = 1; i < OX_LEN; ++i)
         for (int j = 1; j < OY_LEN; ++j) {
-            prev_density[OY_LEN_1 * i + j] = analytical_solution_circle(0., A + HX * i, C + HY * j);
-            //if (fabs(prev_density[OY_LEN_1 * i + j]) < fabs(DBL_MIN_TRIM)) prev_density[OY_LEN_1 * i + j] = 0;
+            u_exact[OY_LEN_1 * i + j] = analytical_slv(A + HX * i, C + HY * j);
+            u_exact_xx[OY_LEN_1 * i + j] = analytical_slv_xx(A + HX * i, C + HY * j);
+            u_exact_yy[OY_LEN_1 * i + j] = analytical_slv_yy(A + HX * i, C + HY * j);
         }
-    }
+
+    memcpy(u, prev_u, XY_LEN * sizeof(double));
+    memcpy(u_xx, prev_u_xx, XY_LEN * sizeof(double));
+    memcpy(u_yy, prev_u_yy, XY_LEN * sizeof(double));
+
+
 
     //</editor-fold>
 
-    printf("SUM RHO INIT = %le\n", calc_array_sum(prev_density, OX_LEN_1, OY_LEN_1, 0));
-    printf("SUM ABS RHO INIT= %le\n", calc_array_sum(prev_density, OX_LEN_1, OY_LEN_1, 1));
+    //<editor-fold desc="Calculate right-hand side rp">
+
+    // G1 -- (x_i, 0=C) -- bottom boundary
+    // G3 -- (x_i, OY_LEN=D) -- top boundary
+    for (int i = 1; i < OX_LEN; ++i) {
+        rp_u_yy[OY_LEN_1 * i] = ff_yy_qrule_Simpson(i, 0, i, 0)
+                                + ff_yy_qrule_Simpson(i - 1, 0, i, 0);
+        rp_u_yy[OY_LEN_1 * i + OY_LEN] = ff_yy_qrule_Simpson(i - 1, OY_LEN - 1, i, OY_LEN)
+                                         + ff_yy_qrule_Simpson(i, OY_LEN - 1, i, OY_LEN);
+
+        f_u_check[OY_LEN_1 * i] = ff_qrule_Simpson(i, 0, i, 0)
+                                  + ff_qrule_Simpson(i - 1, 0, i, 0);
+        f_u_xx_check[OY_LEN_1 * i] = ff_xx_qrule_Simpson(i, 0, i, 0)
+                                  + ff_xx_qrule_Simpson(i - 1, 0, i, 0);
+        f_u_yy_check[OY_LEN_1 * i] = ff_yy_qrule_Simpson(i, 0, i, 0)
+                                  + ff_yy_qrule_Simpson(i - 1, 0, i, 0);
+
+        f_u_check[OY_LEN_1 * i + OY_LEN] = ff_qrule_Simpson(i - 1, OY_LEN - 1, i, OY_LEN)
+                                         + ff_qrule_Simpson(i, OY_LEN - 1, i, OY_LEN);
+        f_u_xx_check[OY_LEN_1 * i + OY_LEN] = ff_xx_qrule_Simpson(i - 1, OY_LEN - 1, i, OY_LEN)
+                                           + ff_xx_qrule_Simpson(i, OY_LEN - 1, i, OY_LEN);
+        f_u_yy_check[OY_LEN_1 * i + OY_LEN] = ff_yy_qrule_Simpson(i - 1, OY_LEN - 1, i, OY_LEN)
+                                           + ff_yy_qrule_Simpson(i, OY_LEN - 1, i, OY_LEN);
+    }
+
+    // G2 -- (OX_LEN=B, y_j) -- right boundary
+    // G4 -- (0=A, y_j) -- left boundary
+    for (int j = 1; j < OY_LEN; ++j) {
+        rp_u_xx[OY_LEN_1 * OX_LEN + j] = ff_xx_qrule_Simpson(OX_LEN - 1, j, OX_LEN, j)
+                                         + ff_xx_qrule_Simpson(OX_LEN - 1, j - 1, OX_LEN, j);
+        rp_u_xx[j] = ff_xx_qrule_Simpson(0, j, 0, j)
+                     + ff_xx_qrule_Simpson(0, j - 1, 0, j);
+
+        f_u_check[OY_LEN_1 * OX_LEN + j] = ff_qrule_Simpson(OX_LEN - 1, j, OX_LEN, j)
+                                         + ff_qrule_Simpson(OX_LEN - 1, j - 1, OX_LEN, j);
+        f_u_xx_check[OY_LEN_1 * OX_LEN + j] = ff_xx_qrule_Simpson(OX_LEN - 1, j, OX_LEN, j)
+                                           + ff_xx_qrule_Simpson(OX_LEN - 1, j - 1, OX_LEN, j);
+        f_u_yy_check[OY_LEN_1 * OX_LEN + j] = ff_yy_qrule_Simpson(OX_LEN - 1, j, OX_LEN, j)
+                                           + ff_yy_qrule_Simpson(OX_LEN - 1, j - 1, OX_LEN, j);
+
+        f_u_check[j] = ff_qrule_Simpson(0, j, 0, j)
+                     + ff_qrule_Simpson(0, j - 1, 0, j);
+        f_u_xx_check[j] = ff_xx_qrule_Simpson(0, j, 0, j)
+                     + ff_xx_qrule_Simpson(0, j - 1, 0, j);
+        f_u_yy_check[j] = ff_yy_qrule_Simpson(0, j, 0, j)
+                     + ff_yy_qrule_Simpson(0, j - 1, 0, j);
+
+    }
+
+    // inner points
+    for (int i = 1; i < OX_LEN; ++i)
+        for (int j = 1; j < OY_LEN; ++j) {
+            rp_u[OY_LEN_1 * i + j] = ff_qrule_Simpson(i, j, i, j)
+                                     + ff_qrule_Simpson(i - 1, j, i, j)
+                                     + ff_qrule_Simpson(i - 1, j - 1, i, j)
+                                     + ff_qrule_Simpson(i, j - 1, i, j);
+            rp_u_xx[OY_LEN_1 * i + j] = ff_xx_qrule_Simpson(i, j, i, j)
+                                        + ff_xx_qrule_Simpson(i - 1, j, i, j)
+                                        + ff_xx_qrule_Simpson(i - 1, j - 1, i, j)
+                                        + ff_xx_qrule_Simpson(i, j - 1, i, j);
+            rp_u_yy[OY_LEN_1 * i + j] = ff_yy_qrule_Simpson(i, j, i, j)
+                                        + ff_yy_qrule_Simpson(i - 1, j, i, j)
+                                        + ff_yy_qrule_Simpson(i - 1, j - 1, i, j)
+                                        + ff_yy_qrule_Simpson(i, j - 1, i, j);
+
+            f_u_check[OY_LEN_1 * i + j] = ff_qrule_Simpson(i, j, i, j)
+                                     + ff_qrule_Simpson(i - 1, j, i, j)
+                                     + ff_qrule_Simpson(i - 1, j - 1, i, j)
+                                     + ff_qrule_Simpson(i, j - 1, i, j);
+            f_u_xx_check[OY_LEN_1 * i + j] = ff_xx_qrule_Simpson(i, j, i, j)
+                                        + ff_xx_qrule_Simpson(i - 1, j, i, j)
+                                        + ff_xx_qrule_Simpson(i - 1, j - 1, i, j)
+                                        + ff_xx_qrule_Simpson(i, j - 1, i, j);
+            f_u_yy_check[OY_LEN_1 * i + j] = ff_yy_qrule_Simpson(i, j, i, j)
+                                        + ff_yy_qrule_Simpson(i - 1, j, i, j)
+                                        + ff_yy_qrule_Simpson(i - 1, j - 1, i, j)
+                                        + ff_yy_qrule_Simpson(i, j - 1, i, j);
+        }
+
+    //(0,0)
+    f_u_check[0] = ff_qrule_Simpson(0, 0, 0, 0);
+    f_u_xx_check[0] = ff_xx_qrule_Simpson(0, 0, 0, 0);
+    f_u_yy_check[0] = ff_yy_qrule_Simpson(0, 0, 0, 0);
+
+    //(1,0) = (OX_LEN,0)
+    f_u_check[OY_LEN_1 * OX_LEN] = ff_qrule_Simpson(OX_LEN-1, 0, OX_LEN, 0);
+    f_u_xx_check[OY_LEN_1 * OX_LEN] = ff_xx_qrule_Simpson(OX_LEN-1, 0, OX_LEN, 0);
+    f_u_yy_check[OY_LEN_1 * OX_LEN] = ff_yy_qrule_Simpson(OX_LEN-1, 0, OX_LEN, 0);
+
+    //(1,1) = (OX_LEN,OY_LEN)
+    f_u_check[OY_LEN_1 * OX_LEN + OY_LEN] = ff_qrule_Simpson(OX_LEN-1, OY_LEN-1, OX_LEN, OY_LEN);
+    f_u_xx_check[OY_LEN_1 * OX_LEN + OY_LEN] = ff_xx_qrule_Simpson(OX_LEN-1, OY_LEN-1, OX_LEN, OY_LEN);
+    f_u_yy_check[OY_LEN_1 * OX_LEN + OY_LEN] = ff_yy_qrule_Simpson(OX_LEN-1, OY_LEN-1, OX_LEN, OY_LEN);
+
+    //(0,1) = (0,OY_LEN)
+    f_u_check[OY_LEN] = ff_qrule_Simpson(0, OY_LEN-1, 0, OY_LEN);
+    f_u_xx_check[OY_LEN] = ff_xx_qrule_Simpson(0, OY_LEN-1, 0, OY_LEN);
+    f_u_yy_check[OY_LEN] = ff_yy_qrule_Simpson(0, OY_LEN-1, 0, OY_LEN);
+
+    //</editor-fold>
+
     fflush(stdout);
 
-    double maxRes = FLT_MAX;
-    double *extrems = new double[2];
+    double *maxRes = new double[4];
+    maxRes[0] = maxRes[1] = maxRes[2] = maxRes[3] = FLT_MIN;
+    double *maxErr = new double[4];
+    maxErr[0] = maxErr[1] = maxErr[2] = maxErr[3] = FLT_MIN;
+    double *maxErr_l2 = new double[4];
+    maxErr_l2[0] = maxErr_l2[1] = maxErr_l2[2] = maxErr_l2[3] = FLT_MIN;
+    double *maxDif = new double[4];
+    maxDif[0] = maxDif[1] = maxDif[2] = maxDif[3] = FLT_MIN;
 
-    for (int tl = 1; tl <= TIME_STEP_CNT; tl++) {
+    int iter = 0;
 
-        //<editor-fold desc="Calculate phi">
+    double gamma = 1.e-1;
 
-        // with usage of prev_density we calculate phi function values
+
+    maxRes[1] = Residual_u(residual_u, u_exact, u_exact_xx, u_exact_yy, f_u_check, 1);
+    maxRes[2] = Residual_u_xx(residual_u_xx, u_exact, u_exact_xx, u_exact_yy, f_u_xx_check, 1);
+    maxRes[3] = Residual_u_yy(residual_u_yy, u_exact, u_exact_xx, u_exact_yy, f_u_yy_check, 1);
+
+    printf("%d :  maxRes u = %le   maxRes u_xx = %le   maxRes u_yy = %le\n",
+           iter, maxRes[1], maxRes[2], maxRes[3]);
+    fflush(stdout);
+
+    print_data_to_files("exact_u", u_exact, u_exact_xx, u_exact_yy, iter);
+    print_data_to_files("f_u", f_u_check, f_u_xx_check, f_u_yy_check, iter);
+    print_data_to_files("residual_u", residual_u, residual_u_xx, residual_u_yy, iter);
+
+    for (int i = 0; i < OX_LEN_1; ++i) {
+        for (int j = 0; j < OY_LEN_1; ++j) {
+            residual_u[OY_LEN_1 * i + j] = 0.;
+            residual_u_xx[OY_LEN_1 * i + j] = 0.;
+            residual_u_yy[OY_LEN_1 * i + j] = 0.;
+        }
+    }
+
+    maxRes[1] = Residual_u(residual_u, prev_u, prev_u_xx, prev_u_yy, rp_u, 1);
+    maxRes[2] = Residual_u_xx(residual_u_xx, prev_u, prev_u_xx, prev_u_yy, rp_u_xx, 1);
+    maxRes[3] = Residual_u_yy(residual_u_yy, prev_u, prev_u_xx, prev_u_yy, rp_u_yy, 1);
+
+    while ((maxErr[1] > EPS || maxRes[1] > RES_EPS) && iter < 10 * OX_LEN_1 * OY_LEN_1) {
+
+        iter++;
 
         // G1 -- (x_i, 0=C) -- bottom boundary
+        // G3 -- (x_i, OY_LEN=D) -- top boundary
         for (int i = 1; i < OX_LEN; ++i) {
-            if (G1[i] == 1) {
-                double value = 0.;
-                if (INTEGR_TYPE == 1) {
-                    value = get_phi_integ_midpoint(i, 0, prev_density, TAU * tl);
-                }
-                else if (INTEGR_TYPE == 2) {
-                    value = get_phi_integ_trapezium(i, 0, prev_density, TAU * tl);
-                }
-                phi[OY_LEN_1 * i] = value;
-            }
+            u_yy[OY_LEN_1 * i] = prev_u_yy[OY_LEN_1 * i]
+                                 - gamma * residual_u_yy[OY_LEN_1 * i];
+            u_yy[OY_LEN_1 * i + OY_LEN] = prev_u_yy[OY_LEN_1 * i + OY_LEN]
+                                          - gamma * residual_u_yy[OY_LEN_1 * i + OY_LEN];
         }
 
         // G2 -- (OX_LEN=B, y_j) -- right boundary
-        for (int j = 1; j < OY_LEN; ++j) {
-            if (G2[j] == 1) {
-                double value = 0.;
-                if (INTEGR_TYPE == 1) {
-                    value = get_phi_integ_midpoint(OX_LEN, j, prev_density, TAU * tl);
-                }
-                else if (INTEGR_TYPE == 2) {
-                    value = get_phi_integ_trapezium(OX_LEN, j, prev_density, TAU * tl);
-                }
-                phi[OY_LEN_1 * OX_LEN + j] = value;
-            }
-        }
-
-        // G3 -- (x_i, OY_LEN=D) -- top boundary
-        for (int i = 1; i < OX_LEN; ++i) {
-            if (G3[i] == 1) {
-                double value = 0.;
-                if (INTEGR_TYPE == 1) {
-                    value = get_phi_integ_midpoint(i, OY_LEN, prev_density, TAU * tl);
-                }
-                else if (INTEGR_TYPE == 2) {
-                    value = get_phi_integ_trapezium(i, OY_LEN, prev_density, TAU * tl);
-                }
-                phi[OY_LEN_1 * i + OY_LEN] = value;
-            }
-        }
-
         // G4 -- (0=A, y_j) -- left boundary
         for (int j = 1; j < OY_LEN; ++j) {
-            if (G4[j] == 1) {
-                double value = 0.;
-                if (INTEGR_TYPE == 1) {
-                    value = get_phi_integ_midpoint(0, j, prev_density, TAU * tl);
-                }
-                else if (INTEGR_TYPE == 2) {
-                    value = get_phi_integ_trapezium(0, j, prev_density, TAU * tl);
-                }
-                phi[j] = value;
-            }
-        }
-
-        // point (0.0)
-        if (CP00 == 1) {
-            double value = 0.;
-            if (INTEGR_TYPE == 1) {
-                value = get_phi_integ_midpoint(0, 0, prev_density, TAU * tl);
-            }
-            else if (INTEGR_TYPE == 2) {
-                value = get_phi_integ_trapezium(0, 0, prev_density, TAU * tl);
-            }
-            phi[0] = value;
-        }
-
-        // point (1.0)
-        if (CP10 == 1) {
-            double value = 0.;
-            if (INTEGR_TYPE == 1) {
-                value = get_phi_integ_midpoint(OX_LEN, 0, prev_density, TAU * tl);
-            }
-            else if (INTEGR_TYPE == 2) {
-                value = get_phi_integ_trapezium(OX_LEN, 0, prev_density, TAU * tl);
-            }
-            phi[OY_LEN_1 * OX_LEN] = value;
-        }
-
-        // point (0.1)
-        if (CP01 == 1) {
-            double value = 0.;
-            if (INTEGR_TYPE == 1) {
-                value = get_phi_integ_midpoint(0, OY_LEN, prev_density, TAU * tl);
-            }
-            else if (INTEGR_TYPE == 2) {
-                value = get_phi_integ_trapezium(0, OY_LEN, prev_density, TAU * tl);
-            }
-            phi[OY_LEN] = value;
-        }
-
-        // point (1,1)
-        if (CP11 == 1) {
-            double value = 0.;
-            if (INTEGR_TYPE == 1) {
-                value = get_phi_integ_midpoint(OX_LEN, OY_LEN, prev_density, TAU * tl);
-            }
-            else if (INTEGR_TYPE == 2) {
-                value = get_phi_integ_trapezium(OX_LEN, OY_LEN, prev_density, TAU * tl);
-            }
-            phi[OY_LEN_1 * OX_LEN + OY_LEN] = value;
+            u_xx[OY_LEN_1 * OX_LEN + j] = prev_u_xx[OY_LEN_1 * OX_LEN + j]
+                                          - gamma * residual_u_xx[OY_LEN_1 * OX_LEN + j];
+            u_xx[j] = prev_u_xx[j]
+                      - gamma * residual_u_xx[j];
         }
 
         // inner points
         for (int i = 1; i < OX_LEN; ++i)
             for (int j = 1; j < OY_LEN; ++j) {
-                double value = 0.;
-                if (INTEGR_TYPE == 1) {
-                    value = get_phi_integ_midpoint(i, j, prev_density, TAU * tl);
-                }
-                else if (INTEGR_TYPE == 2) {
-                    value = get_phi_integ_trapezium(i, j, prev_density, TAU * tl);
-                }
-                phi[OY_LEN_1 * i + j] = value;
+                u[OY_LEN_1 * i + j] = prev_u[OY_LEN_1 * i + j]
+                                      - gamma * residual_u[OY_LEN_1 * i + j];
+                u_xx[OY_LEN_1 * i + j] = prev_u_xx[OY_LEN_1 * i + j]
+                                         - gamma * residual_u_xx[OY_LEN_1 * i + j];
+                u_yy[OY_LEN_1 * i + j] = prev_u_yy[OY_LEN_1 * i + j]
+                                         - gamma * residual_u_yy[OY_LEN_1 * i + j];
             }
 
-        //</editor-fold>
+        maxDif[0] = maxDif[1] = maxDif[2] = maxDif[3] = FLT_MIN;
+        for (int i = 0; i < OX_LEN_1; ++i)
+            for (int j = 0; j < OY_LEN_1; ++j) {
 
-        ic = 0;
-        double maxErr = FLT_MAX;
+                double val = fabs(u[OY_LEN_1 * i + j] - prev_u[OY_LEN_1 * i + j]);
+                dif_u[OY_LEN_1 * i + j] = val;
+                if (val > maxDif[1]) maxDif[1] = val;
 
-        while ((maxErr > EPS || maxRes > RES_EPS) && ic < 5 * OX_LEN_1) {
+                val = fabs(u_xx[OY_LEN_1 * i + j] - prev_u_xx[OY_LEN_1 * i + j]);
+                dif_u_xx[OY_LEN_1 * i + j] = val;
+                if (val > maxDif[2]) maxDif[2] = val;
 
-            //<editor-fold desc="Calculate density">
-
-            // G1 -- (x_i, 0=C) -- bottom boundary
-            double rpCoef = 32. / (9. * HX * HY);
-            for (int i = 1; i < OX_LEN; ++i) {
-                if (G1[i] == 1) {
-                    density[OY_LEN_1 * i] = -1. / 3. * prev_density[OY_LEN_1 * i + 1]
-                                            - 1. / 6. * (prev_density[OY_LEN_1 * (i + 1)] +
-                                                         prev_density[OY_LEN_1 * (i - 1)])
-                                            - 1. / 18. * (prev_density[OY_LEN_1 * (i + 1) + 1] +
-                                                          prev_density[OY_LEN_1 * (i - 1) + 1])
-                                            + rpCoef * phi[OY_LEN_1 * i];
-                    if (fabs(density[OY_LEN_1 * i]) < fabs(DBL_MIN_TRIM)) density[OY_LEN_1 * i] = 0;
-                }
+                val = fabs(u_yy[OY_LEN_1 * i + j] - prev_u_yy[OY_LEN_1 * i + j]);
+                dif_u_yy[OY_LEN_1 * i + j] = val;
+                if (val > maxDif[3]) maxDif[3] = val;
             }
 
-            // G2 -- (OX_LEN=B, y_j) -- right boundary
-            for (int j = 1; j < OY_LEN; ++j) {
-                if (G2[j] == 1) {
-                    density[OY_LEN_1 * OX_LEN + j] = -1. / 3. * prev_density[OY_LEN_1 * (OX_LEN - 1) + j]
-                                                     - 1. / 6. * (prev_density[OY_LEN_1 * OX_LEN + j - 1] +
-                                                                  prev_density[OY_LEN_1 * OX_LEN + j + 1])
-                                                     - 1. / 18. * (prev_density[OY_LEN_1 * (OX_LEN - 1) + j - 1] +
-                                                                   prev_density[OY_LEN_1 * (OX_LEN - 1) + j + 1])
-                                                     + rpCoef * phi[OY_LEN_1 * OX_LEN + j];
-                    if (fabs(density[OY_LEN_1 * OX_LEN + j]) < fabs(DBL_MIN_TRIM)) density[OY_LEN_1 * OX_LEN + j] = 0;
-                }
-            }
+        memcpy(prev_u, u, XY_LEN * sizeof(double));
+        memcpy(prev_u_xx, u_xx, XY_LEN * sizeof(double));
+        memcpy(prev_u_yy, u_yy, XY_LEN * sizeof(double));
 
-            // G3 -- (x_i, OY_LEN=D) -- top boundary
-            for (int i = 1; i < OX_LEN; ++i) {
-                if (G3[i] == 1) {
-                    density[OY_LEN_1 * i + OY_LEN] = -1. / 3. * prev_density[OY_LEN_1 * i + OY_LEN - 1]
-                                                     - 1. / 6. * (prev_density[OY_LEN_1 * (i + 1) + OY_LEN] +
-                                                                  prev_density[OY_LEN_1 * (i - 1) + OY_LEN])
-                                                     - 1. / 18. * (prev_density[OY_LEN_1 * (i + 1) + OY_LEN - 1] +
-                                                                   prev_density[OY_LEN_1 * (i - 1) + OY_LEN - 1])
-                                                     + rpCoef * phi[OY_LEN_1 * i + OY_LEN];
-                    if (fabs(density[OY_LEN_1 * i + OY_LEN]) < fabs(DBL_MIN_TRIM)) density[OY_LEN_1 * i + OY_LEN] = 0;
-                }
-            }
+        maxRes[1] = Residual_u(residual_u, prev_u, prev_u_xx, prev_u_yy, rp_u, 1);
+        maxRes[2] = Residual_u_xx(residual_u_xx, prev_u, prev_u_xx, prev_u_yy, rp_u_xx, 1);
+        maxRes[3] = Residual_u_yy(residual_u_yy, prev_u, prev_u_xx, prev_u_yy, rp_u_yy, 1);
 
-            // G4 -- (0=A, y_j) -- left boundary
-            for (int j = 1; j < OY_LEN; ++j) {
-                if (G4[j] == 1) { // проверить коэф-ты
-                    density[j] = -1. / 3. * prev_density[OY_LEN_1 + j]
-                                 - 1. / 6. * (prev_density[j + 1] +
-                                              prev_density[j - 1])
-                                 - 1. / 18. * (prev_density[OY_LEN_1 + j + 1] +
-                                               prev_density[OY_LEN_1 + j - 1])
-                                 + rpCoef * phi[j];
-                    if (fabs(density[j]) < fabs(DBL_MIN_TRIM)) density[j] = 0;
-                }
-            }
-
-            rpCoef = 64. / (9. * HX * HY);
-
-            // point (0,0)
-            if (CP00 == 1) {
-                density[0] = -1. / 3. * (prev_density[1]
-                                         + prev_density[OY_LEN_1])
-                             - 1. / 9. * prev_density[OY_LEN_1 + 1]
-                             + rpCoef * phi[0];
-                if (fabs(density[0]) < fabs(DBL_MIN_TRIM))
-                    density[0] = 0;
-            }
-
-            // point (1,0)
-            if (CP10 == 1) {
-                density[OY_LEN_1 * OX_LEN] = -1. / 3. * (prev_density[OY_LEN_1 * OX_LEN + 1]
-                                                         + prev_density[OY_LEN_1 * (OX_LEN - 1)])
-                                             - 1. / 9. * prev_density[OY_LEN_1 * (OX_LEN - 1) + 1]
-                                             + rpCoef * phi[OY_LEN_1 * OX_LEN];
-                if (fabs(density[OY_LEN_1 * OX_LEN]) < fabs(DBL_MIN_TRIM))
-                    density[OY_LEN_1 * OX_LEN] = 0;
-            }
-
-            // point (0,1)
-            if (CP01 == 1) {
-                density[OY_LEN] = -1. / 3. * (prev_density[OY_LEN - 1]
-                                              + prev_density[OY_LEN_1 + OY_LEN])
-                                  - 1. / 9. * prev_density[OY_LEN_1 + OY_LEN - 1]
-                                  + rpCoef * phi[OY_LEN];
-                if (fabs(density[OY_LEN]) < fabs(DBL_MIN_TRIM))
-                    density[OY_LEN] = 0;
-            }
-
-            // point (1,1)
-            if (CP11 == 1) {
-                density[OY_LEN_1 * OX_LEN + OY_LEN] = -1. / 3. * (prev_density[OY_LEN_1 * OX_LEN + OY_LEN - 1]
-                                                                  + prev_density[OY_LEN_1 * (OX_LEN - 1) + OY_LEN])
-                                                      - 1. / 9. * prev_density[OY_LEN_1 * (OX_LEN - 1) + OY_LEN - 1]
-                                                      + rpCoef * phi[OY_LEN_1 * OX_LEN + OY_LEN];
-                if (fabs(density[OY_LEN_1 * OX_LEN + OY_LEN]) < fabs(DBL_MIN_TRIM))
-                    density[OY_LEN_1 * OX_LEN + OY_LEN] = 0;
-            }
-
-            rpCoef = 16. / (9. * HX * HY);
-            for (int i = 1; i < OX_LEN; ++i) {
-                for (int j = 1; j < OY_LEN; ++j) {
-                    density[OY_LEN_1 * i + j] = -1. / 6. * (
-                            prev_density[OY_LEN_1 * i + j - 1] + // left
-                            prev_density[OY_LEN_1 * (i - 1) + j] + // upper
-                            prev_density[OY_LEN_1 * i + j + 1] + // right
-                            prev_density[OY_LEN_1 * (i + 1) + j] // bottom
-                    ) - 1. / 36. * (
-                            prev_density[OY_LEN_1 * (i + 1) + j + 1] + // bottom right
-                            prev_density[OY_LEN_1 * (i + 1) + j - 1] + // bottom left
-                            prev_density[OY_LEN_1 * (i - 1) + j + 1] + // upper right
-                            prev_density[OY_LEN_1 * (i - 1) + j - 1]  // upper left
-                    ) + rpCoef * phi[OY_LEN_1 * i + j];
-                    if (fabs(density[OY_LEN_1 * i + j]) < fabs(DBL_MIN_TRIM)) density[OY_LEN_1 * i + j] = 0;
-                }
-            }
-            ++ic;
-
-            maxErr = FLT_MIN;
-            for (int i = 0; i < OX_LEN_1; ++i)
-                for (int j = 0; j < OY_LEN_1; ++j) {
-                    double val = fabs(density[i * OY_LEN_1 + j] - prev_density[i * OY_LEN_1 + j]);
-                    if (val > maxErr) maxErr = val;
-                }
-
-            //</editor-fold>
-
-            //<editor-fold desc="Calculate residual">
-
-            // !!!!!! КАЖЕТСЯ ЧТО НУЖНО ЗАДАВАТЬ rp_coef правильно для каждой из границ !!!!!!!
-
-            rpCoef = HX * HY / 64.;
-
-            // G1 -- (x_i, 0=C) -- bottom boundary
-            for (int i = 1; i < OX_LEN; ++i) {
-                if (G1[i] == 1) {
-                    residual[OY_LEN_1 * i] = rpCoef * (
-                            18. * density[OY_LEN_1 * i] +
-                            6. * density[OY_LEN_1 * i + 1] +
-                            3. * (
-                                    density[OY_LEN_1 * (i - 1)] +
-                                    density[OY_LEN_1 * (i + 1)]
-                            ) +
-                            density[OY_LEN_1 * (i - 1) + 1] +
-                            density[OY_LEN_1 * (i + 1) + 1]
-                    ) - phi[OY_LEN_1 * i];
-                }
-            }
-
-            // G2 -- (OX_LEN=B, y_j) -- right boundary
-            for (int j = 1; j < OY_LEN; ++j) {
-                if (G2[j] == 1) {
-                    residual[OY_LEN_1 * OX_LEN + j] = rpCoef * (
-                            18. * density[OY_LEN_1 * OX_LEN + j] +
-                            6. * density[OY_LEN_1 * (OX_LEN - 1) + j] +
-                            3. * (
-                                    density[OY_LEN_1 * OX_LEN + j - 1] +
-                                    density[OY_LEN_1 * OX_LEN + j + 1]
-                            ) +
-                            density[OY_LEN_1 * (OX_LEN - 1) + j - 1] +
-                            density[OY_LEN_1 * (OX_LEN - 1) + j + 1]
-                    ) - phi[OY_LEN_1 * OX_LEN + j];
-                }
-            }
-
-            // G3 -- (x_i, OY_LEN=D) -- top boundary
-            for (int i = 1; i < OX_LEN; ++i) {
-                if (G3[i] == 1) {
-                    residual[OY_LEN_1 * i + OY_LEN] = rpCoef * (
-                            18. * density[OY_LEN_1 * i + OY_LEN] +
-                            6. * density[OY_LEN_1 * i + OY_LEN - 1] +
-                            3. * (
-                                    density[OY_LEN_1 * (i + 1) + OY_LEN] +
-                                    density[OY_LEN_1 * (i - 1) + OY_LEN]
-                            ) +
-                            density[OY_LEN_1 * (i + 1) + OY_LEN - 1] +
-                            density[OY_LEN_1 * (i - 1) + OY_LEN - 1]
-                    ) - phi[OY_LEN_1 * i + OY_LEN];
-                }
-            }
-
-            // G4 -- (0=A, y_j) -- left boundary
-            for (int j = 1; j < OY_LEN; ++j) {
-                if (G4[j] == 1) {
-                    residual[j] = rpCoef * (
-                            18. * density[j] +
-                            6. * density[OY_LEN_1 + j] +
-                            3. * (
-                                    density[j + 1] +
-                                    density[j - 1]
-                            ) +
-                            density[OY_LEN_1 + j + 1] +
-                            density[OY_LEN_1 + j - 1]
-                    ) - phi[j];
-                }
-            }
-
-            // point (0,0)
-            if (CP00 == 1) {
-                residual[0] = rpCoef * (
-                        9. * density[0] +
-                        3. * (
-                                density[1] +
-                                density[OY_LEN_1]
-                        ) +
-                        density[OY_LEN_1 + 1]
-                ) - phi[0];
-            }
-
-            // point (1,0)
-            if (CP10 == 1) {
-                residual[OY_LEN_1 * OX_LEN] = rpCoef * (
-                        9. * density[OY_LEN_1 * OX_LEN] +
-                        3. * (
-                                density[OY_LEN_1 * (OX_LEN - 1)] +
-                                density[OY_LEN_1 * OX_LEN + 1]
-                        ) +
-                        density[OY_LEN_1 * (OX_LEN - 1) + 1]
-                ) - phi[OY_LEN_1 * OX_LEN];
-            }
-
-            // point (0,1)
-            if (CP01 == 1) {
-                residual[OY_LEN] = rpCoef * (
-                        9. * density[OY_LEN] +
-                        3. * (
-                                density[OY_LEN - 1] +
-                                density[OY_LEN_1 + OY_LEN]
-                        ) +
-                        density[OY_LEN_1 + OY_LEN - 1]
-                ) - phi[OY_LEN];
-            }
-
-            // point (1,1)
-            if (CP11 == 1) {
-                residual[OY_LEN_1 * OX_LEN + OY_LEN] = rpCoef * (
-                        9. * density[OY_LEN_1 * OX_LEN + OY_LEN] +
-                        3. * (
-                                density[OY_LEN_1 * OX_LEN + OY_LEN - 1] +
-                                density[OY_LEN_1 * (OX_LEN - 1) + OY_LEN]
-                        ) +
-                        density[OY_LEN_1 * (OX_LEN - 1) + OY_LEN - 1]
-                ) - phi[OY_LEN_1 * OX_LEN + OY_LEN];
-            }
-
-            // inner points
-            for (int i = 1; i < OX_LEN; ++i) {
-                for (int j = 1; j < OY_LEN; ++j) {
-                    residual[OY_LEN_1 * i + j] = rpCoef * (
-                            36. * density[OY_LEN_1 * i + j] +
-                            6. * (
-                                    density[OY_LEN_1 * i + j - 1] + // left
-                                    density[OY_LEN_1 * (i - 1) + j] + // upper
-                                    density[OY_LEN_1 * i + j + 1] + // right
-                                    density[OY_LEN_1 * (i + 1) + j] // bottom
-                            ) +
-                            density[OY_LEN_1 * (i + 1) + j + 1] + // bottom right
-                            density[OY_LEN_1 * (i + 1) + j - 1] + // bottom left
-                            density[OY_LEN_1 * (i - 1) + j + 1] + // upper right
-                            density[OY_LEN_1 * (i - 1) + j - 1]  // upper left
-                    ) - phi[OY_LEN_1 * i + j];
-                }
-            }
-
-            maxRes = FLT_MIN;
-            for (int i = 0; i < OX_LEN_1; ++i) {
-                for (int j = 0; j < OY_LEN_1; ++j) {
-                    double val = fabs(residual[i * OY_LEN_1 + j]);
-                    if (val > maxRes) maxRes = val;
-                }
-            }
-
-            //</editor-fold>
-
-            memcpy(prev_density, density, XY_LEN * sizeof(double));
-        }
-
-        printf("tl = %d IterCount = %d Max(Residual) = %le Sum(Rho) = %le Sum(absRho) = %le\n",
-               tl, ic, maxRes, calc_array_sum(density, OX_LEN_1, OY_LEN_1, 0),
-               calc_array_sum(density, OX_LEN_1, OY_LEN_1, 1));
-        fflush(stdout);
-
-        if (tl % 5 == 0) {
-            print_data_to_files(phi, density, residual, tl);
-            /*int fixed_x = (int) (get_center_x() / HX);
-            int fixed_y = (int) (get_center_y() / HY);
-            print_line_along_x("rho", OX_LEN, OY_LEN, HX, HY, tl, A, C, get_center_x(), get_center_y(), TAU,
-                               U_VELOCITY, V_VELOCITY, density, fixed_y);
-            print_line_along_y("rho", OX_LEN, OY_LEN, HX, HY, tl, A, C, get_center_x(), get_center_y(), TAU,
-                               U_VELOCITY, V_VELOCITY, density, fixed_x);*/
+        if (iter % 10 == 0) {
+            printf("%d :  maxDif u = %le   maxDif u_xx = %le   maxDif u_yy = %le   "
+                           "maxRes u = %le   maxRes u_xx = %le   maxRes u_yy = %le\n",
+                   iter, maxDif[1], maxDif[2], maxDif[3], maxRes[1], maxRes[2], maxRes[3]);
+            fflush(stdout);
         }
     }
+
+
+
+    double *err_u = calc_error_u(HX, HY, u);
+    double *err_u_xx = calc_error_u_xx(HX, HY, u_xx);
+    double *err_u_yy = calc_error_u_yy(HX, HY, u_yy);
+
+    maxErr[1] = get_l_inf_norm(OX_LEN_1, OY_LEN_1, err_u);
+    maxErr[2] = get_l_inf_norm(OX_LEN_1, OY_LEN_1, err_u_xx);
+    maxErr[3] = get_l_inf_norm(OX_LEN_1, OY_LEN_1, err_u_yy);
+
+    maxErr_l2[1] = get_l2_norm_vec(OX_LEN_1, OY_LEN_1, err_u);
+    maxErr_l2[2] = get_l2_norm_vec(OX_LEN_1, OY_LEN_1, err_u_xx);
+    maxErr_l2[3] = get_l2_norm_vec(OX_LEN_1, OY_LEN_1, err_u_yy);
+
+    printf("\n***************************************\n");
+           printf("%d :  maxErr u = %le   maxErr u_xx = %le   maxErr u_yy = %le\n",
+           iter, maxErr[1], maxErr[2], maxErr[3]);
+    printf("%d :  maxRes u = %le   maxRes u_xx = %le   maxRes u_yy = %le\n",
+           iter, maxRes[1], maxRes[2], maxRes[3]);
+    printf("%d :  maxErr_L2 u = %le   maxErr_L2 u_xx = %le   maxErr_L2 u_yy = %le\n",
+           iter, maxErr_l2[1], maxErr_l2[2], maxErr_l2[3]);
+
+    print_data_to_files("u", u, u_xx, u_yy, iter);
+    print_data_to_files("err_u", err_u, err_u_xx, err_u_yy, iter);
+
+
+/*
+    printf("tl = %d IterCount = %d Max(Residual) = %le Sum(Rho) = %le Sum(absRho) = %le\n",
+           tl, ic, maxRes, calc_array_sum(density, OX_LEN_1, OY_LEN_1, 0),
+           calc_array_sum(density, OX_LEN_1, OY_LEN_1, 1));
+    fflush(stdout);
+
+    if (tl % 5 == 0) {
+        print_data_to_files(phi, density, residual, tl);
+        int fixed_x = (int) (get_center_x() / HX);
+        int fixed_y = (int) (get_center_y() / HY);
+        print_line_along_x("rho", OX_LEN, OY_LEN, HX, HY, tl, A, C, get_center_x(), get_center_y(), TAU,
+                           U_VELOCITY, V_VELOCITY, density, fixed_y);
+        print_line_along_y("rho", OX_LEN, OY_LEN, HX, HY, tl, A, C, get_center_x(), get_center_y(), TAU,
+                           U_VELOCITY, V_VELOCITY, density, fixed_x);
+    }
+
+
 
     double *err = calc_error_3(HX, HY, TAU * TIME_STEP_CNT, density);
     double l1_err_vec = get_l1_norm_vec(OX_LEN_1, OY_LEN_1, err);
@@ -802,30 +1633,34 @@ double *solve_3(double &tme) {
     extrems = calc_array_extrems(density, OX_LEN_1, OY_LEN_1);
     append_statistics(OX_LEN_1, OY_LEN_1, TAU, ic, l1_err_vec, l1_err_tr, maxRes, extrems,
                       extrems, TIME_STEP_CNT); // !!!!!!!! tmp stab
+*/
 
+    delete[] rp_u;
+    delete[] rp_u_xx;
+    delete[] rp_u_yy;
+    delete[] prev_u;
+    //delete[] u;
+    delete[] prev_u_xx;
+    delete[] u_xx;
+    delete[] prev_u_yy;
+    delete[] u_yy;
+    delete[] residual_u;
+    delete[] residual_u_xx;
+    delete[] residual_u_yy;
+    delete[] err_u;
+    delete[] err_u_xx;
+    delete[] err_u_yy;
 
-    delete[] prev_density;
-    delete[] phi;
-    delete[] err;
-    delete[] residual;
-    delete[] extrems;
     tme = GetTimer() / 1000;
-    return density;
+    return u;
 }
 
-double *calc_error_3(double hx, double hy, double tt, double *solution) {
+
+
+double *get_exact_solution_3(double hx, double hy) {
     double *res = new double[XY_LEN];
     for (int i = 0; i < OX_LEN_1; i++)
         for (int j = 0; j < OY_LEN_1; j++)
-            res[i * OY_LEN_1 + j] = fabs(solution[i * OY_LEN_1 + j]
-                                         - analytical_solution_circle(tt, A + hx * i, C + hy * j));
-    return res;
-}
-
-double *get_exact_solution_3(double hx, double hy, double t) {
-    double *res = new double[XY_LEN];
-    for (int i = 0; i < OX_LEN_1; i++)
-        for (int j = 0; j < OY_LEN_1; j++)
-            res[i * OY_LEN_1 + j] = fabs(analytical_solution_circle(t, A + hx * i, C + hy * j));
+            res[i * OY_LEN_1 + j] = fabs(analytical_slv(A + hx * i, C + hy * j));
     return res;
 }

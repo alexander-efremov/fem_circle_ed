@@ -2,7 +2,7 @@
 <project version="4">
   <component name="CMakeRunConfigurationManager" shouldGenerate="true" assignedExecutableTargets="true" buildAllGenerated="true">
     <generated>
-      <config projectName="fem_circle" targetName="gtest" />
+      <config projectName="Calendar" targetName="fem_circle" />
       <config projectName="fem_circle" targetName="fem_circle" />
       <config projectName="Calendar" targetName="calendars" />
       <config projectName="Calendar" targetName="gtest_main" />
@@ -10,7 +10,7 @@
       <config projectName="Calendar" targetName="calendar_run" />
       <config projectName="Calendar" targetName="runBasicFemCircleTests" />
       <config projectName="fem_circle" targetName="fem" />
-      <config projectName="Calendar" targetName="fem_circle" />
+      <config projectName="fem_circle" targetName="gtest" />
       <config projectName="fem_circle" targetName="runBasicFemTests" />
       <config projectName="Calendar" targetName="runBasicCalendarTests" />
       <config projectName="Calendar" targetName="gtest" />
@@ -22,9 +22,13 @@
     </ADDITIONAL_GENERATION_ENVIRONMENT>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ca2e1021-3656-4447-a7c8-e97b0c697f0d" name="Default" comment="добавлен солвер 6">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/.idea/vcs.xml" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/fem/utils.h" />
+    <list default="true" id="ca2e1021-3656-4447-a7c8-e97b0c697f0d" name="Default" comment="">
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fem/consts.cpp" afterPath="$PROJECT_DIR$/fem/consts.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fem/consts.h" afterPath="$PROJECT_DIR$/fem/consts.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fem/solver3.cpp" afterPath="$PROJECT_DIR$/fem/solver3.cpp" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fem/utils.h" afterPath="$PROJECT_DIR$/fem/utils.h" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/fem_tests/tests/tests.cpp" afterPath="$PROJECT_DIR$/fem_tests/tests/tests.cpp" />
     </list>
     <ignored path="Calendar.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -45,27 +49,24 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="tests.cpp" pinned="false" current-in-tab="false">
+      <file leaf-file-name="tests.cpp" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/fem_tests/tests/tests.cpp">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.0">
-              <caret line="17" column="3" selection-start-line="17" selection-start-column="3" selection-end-line="17" selection-end-column="3" />
+            <state vertical-scroll-proportion="0.18126889">
+              <caret line="308" column="19" selection-start-line="308" selection-start-column="19" selection-end-line="308" selection-end-column="19" />
               <folding>
-                <element signature="e#1449#5680#0" expanded="false" />
-                <element signature="e#5756#8102#0" expanded="false" />
-                <element signature="e#8192#12407#0" expanded="false" />
-                <element signature="e#12497#16213#0" expanded="false" />
-                <element signature="e#16370#20103#0" expanded="false" />
+                <element signature="e#10691#14407#0" expanded="false" />
+                <element signature="e#14564#18297#0" expanded="false" />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="utils.h" pinned="false" current-in-tab="true">
+      <file leaf-file-name="utils.h" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/fem/utils.h">
           <provider selected="true" editor-type-id="text-editor">
-            <state vertical-scroll-proportion="0.13826367">
-              <caret line="226" column="0" selection-start-line="226" selection-start-column="0" selection-end-line="226" selection-end-column="0" />
+            <state vertical-scroll-proportion="0.0">
+              <caret line="195" column="0" selection-start-line="195" selection-start-column="0" selection-end-line="195" selection-end-column="0" />
               <folding>
                 <element signature="e#132#461#0" expanded="false" />
                 <element signature="e#463#543#0" expanded="false" />
@@ -77,6 +78,18 @@
                 <element signature="e#1024#1112#0" expanded="false" />
                 <element signature="e#1114#2134#0" expanded="false" />
                 <element signature="e#2136#3202#0" expanded="false" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="solver3.cpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/fem/solver3.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0">
+              <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+              <folding>
+                <element signature="e#0#17#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -108,20 +121,38 @@
         <entry file="file://$PROJECT_DIR$/fem/consts.cpp">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="29" column="23" selection-start-line="29" selection-start-column="23" selection-end-line="29" selection-end-column="23" />
+              <caret line="35" column="18" selection-start-line="35" selection-start-column="18" selection-end-line="35" selection-end-column="18" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="solver3.cpp" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/fem/solver3.cpp">
+      <file leaf-file-name="consts.h" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/fem/consts.h">
           <provider selected="true" editor-type-id="text-editor">
             <state vertical-scroll-proportion="0.0">
-              <caret line="382" column="8" selection-start-line="382" selection-start-column="8" selection-end-line="497" selection-end-column="13" />
-              <folding>
-                <element signature="e#0#17#0" expanded="true" />
-              </folding>
+              <caret line="43" column="0" selection-start-line="43" selection-start-column="0" selection-end-line="43" selection-end-column="0" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="solver4.cpp" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/fem/solver4.cpp">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0">
+              <caret line="836" column="67" selection-start-line="836" selection-start-column="12" selection-end-line="836" selection-end-column="67" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="!LaplasLida-rp-new.red" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/!LaplasLida-rp-new.red">
+          <provider selected="true" editor-type-id="text-editor">
+            <state vertical-scroll-proportion="0.0">
+              <caret line="41" column="37" selection-start-line="41" selection-start-column="9" selection-end-line="41" selection-end-column="37" />
+              <folding />
             </state>
           </provider>
         </entry>
@@ -158,20 +189,20 @@
         <option value="$PROJECT_DIR$/fem/solver1.h" />
         <option value="$PROJECT_DIR$/fem/timer.h" />
         <option value="$PROJECT_DIR$/fem/solver1.cpp" />
-        <option value="$PROJECT_DIR$/fem/consts.h" />
         <option value="$PROJECT_DIR$/statistics.dat" />
         <option value="$PROJECT_DIR$/lena_exp_desc.txt" />
         <option value="$PROJECT_DIR$/fem/solver2.cpp" />
-        <option value="$PROJECT_DIR$/fem/solver3.cpp" />
-        <option value="$PROJECT_DIR$/fem/consts.cpp" />
         <option value="$PROJECT_DIR$/fem/solver4.cpp" />
         <option value="$PROJECT_DIR$/fem_tests/test5_1/output" />
         <option value="$PROJECT_DIR$/fem/solver5.cpp" />
         <option value="$PROJECT_DIR$/fem/solver6.cpp" />
         <option value="$PROJECT_DIR$/fem/CMakeLists.txt" />
         <option value="$PROJECT_DIR$/fem/common.h" />
-        <option value="$PROJECT_DIR$/fem_tests/tests/tests.cpp" />
+        <option value="$PROJECT_DIR$/fem/consts.h" />
+        <option value="$PROJECT_DIR$/fem/consts.cpp" />
         <option value="$PROJECT_DIR$/fem/utils.h" />
+        <option value="$PROJECT_DIR$/fem/solver3.cpp" />
+        <option value="$PROJECT_DIR$/fem_tests/tests/tests.cpp" />
       </list>
     </option>
   </component>
@@ -285,7 +316,7 @@
       <recent name="$PROJECT_DIR$/fem" />
     </key>
   </component>
-  <component name="RunManager" selected="Google Test.FemFixture.test5_1_rel">
+  <component name="RunManager" selected="Google Test.FemFixture.test3_3">
     <configuration default="true" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" PASS_PARENT_ENVS="FALSE" PROJECT_NAME="Calendar" TARGET_NAME="calendar_run" CONFIG_NAME="Debug" TEST_MODE="SUITE_TEST">
       <envs />
       <method />
@@ -330,7 +361,7 @@
       <envs />
       <method />
     </configuration>
-    <configuration default="false" name="FemFixture.test3_3" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" WORKING_DIR="file://$PROJECT_DIR$/fem_tests/test3_3" PASS_PARENT_ENVS="FALSE" PROJECT_NAME="fem_circle" TARGET_NAME="runBasicFemTests" CONFIG_NAME="Release" RUN_TARGET_PROJECT_NAME="fem_circle" RUN_TARGET_NAME="runBasicFemTests" TEST_CLASS="FemFixture" TEST_METHOD="test3_3" TEST_MODE="SUITE_TEST">
+    <configuration default="false" name="FemFixture.test3_3" type="CMakeGoogleTestRunConfigurationType" factoryName="Google Test" WORKING_DIR="file://$PROJECT_DIR$/fem_tests/test3_3" PASS_PARENT_ENVS="FALSE" PROJECT_NAME="fem_circle" TARGET_NAME="runBasicFemTests" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="fem_circle" RUN_TARGET_NAME="runBasicFemTests" TEST_CLASS="FemFixture" TEST_METHOD="test3_3" TEST_MODE="SUITE_TEST">
       <envs />
       <method />
     </configuration>
@@ -367,58 +398,58 @@
     <option name="ACTIVE_ACTIONS" value=",INHERITORS_AND_CATEGORIES" />
   </component>
   <component name="TestHistory">
-    <history-entry file="FemFixture_test5_1_rel - 2016.05.16 at 18h 59m 48s.xml">
-      <configuration name="FemFixture.test5_1_rel" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 00h 53m 08s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test5_1_rel - 2016.05.16 at 19h 07m 57s.xml">
-      <configuration name="FemFixture.test5_1_rel" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 00h 54m 55s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test5_1_rel - 2016.05.16 at 19h 11m 45s.xml">
-      <configuration name="FemFixture.test5_1_rel" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 00h 55m 41s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test5_1_rel - 2016.05.16 at 19h 29m 32s.xml">
-      <configuration name="FemFixture.test5_1_rel" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 01h 26m 03s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test5_1_rel - 2016.05.16 at 19h 32m 50s.xml">
-      <configuration name="FemFixture.test5_1_rel" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 01h 28m 54s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test5_1_rel - 2016.05.16 at 21h 45m 31s.xml">
-      <configuration name="FemFixture.test5_1_rel" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 01h 44m 17s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test5_1_rel - 2016.05.17 at 03h 49m 33s.xml">
-      <configuration name="FemFixture.test5_1_rel" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 01h 48m 26s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test5_1_rel - 2016.05.20 at 12h 57m 55s.xml">
-      <configuration name="FemFixture.test5_1_rel" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 01h 52m 32s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test6_1 - 2016.05.24 at 18h 25m 18s.xml">
-      <configuration name="FemFixture.test6_1" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 10h 35m 42s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
-    <history-entry file="FemFixture_test6_1 - 2016.05.24 at 18h 32m 42s.xml">
-      <configuration name="FemFixture.test6_1" configurationId="CMakeGoogleTestRunConfigurationType" />
+    <history-entry file="FemFixture_test3_3 - 2016.06.10 at 10h 41m 03s.xml">
+      <configuration name="FemFixture.test3_3" configurationId="CMakeGoogleTestRunConfigurationType" />
     </history-entry>
   </component>
   <component name="ToolWindowManager">
     <frame x="-1" y="24" width="1026" height="721" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.25" sideWeight="0.49061662" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.17089844" sideWeight="0.49061662" order="0" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
-      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.36548224" sideWeight="0.7548828" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Messages" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.2673435" sideWeight="0.7548828" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="CMake" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3282572" sideWeight="0.5" order="8" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.47572815" sideWeight="0.24511719" order="9" side_tool="true" content_ui="tabs" />
+      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.28764805" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32847896" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.45854485" sideWeight="0.48828125" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.39086294" sideWeight="0.48828125" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32847896" sideWeight="0.5" order="11" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.083984375" sideWeight="0.5093834" order="2" side_tool="true" content_ui="tabs" />
-      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.42394823" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.42301184" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
       <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="combo" />
-      <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.2880259" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
     </layout>
     <layout-to-restore>
@@ -456,7 +487,6 @@
   <component name="VcsManagerConfiguration">
     <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
     <option name="CHECK_NEW_TODO" value="false" />
-    <MESSAGE value="Solver3 added" />
     <MESSAGE value="Тест для 3 го солвера добавлен" />
     <MESSAGE value="Убрал лишние проверки вызода за границы" />
     <MESSAGE value="описал угловые точки в phi" />
@@ -481,7 +511,8 @@
     <MESSAGE value="удалил разбивку на типы точек" />
     <MESSAGE value="попытался подключить openmp" />
     <MESSAGE value="добавлен солвер 6" />
-    <option name="LAST_COMMIT_MESSAGE" value="добавлен солвер 6" />
+    <MESSAGE value="тест" />
+    <option name="LAST_COMMIT_MESSAGE" value="тест" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -490,17 +521,40 @@
           <url>file://$PROJECT_DIR$/main.cpp</url>
           <option name="timeStamp" value="4" />
         </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/fem/solver3.cpp</url>
+          <line>1263</line>
+          <option name="timeStamp" value="160" />
+        </line-breakpoint>
       </breakpoints>
-      <option name="time" value="130" />
+      <breakpoints-dialog>
+        <breakpoints-dialog />
+      </breakpoints-dialog>
+      <option name="time" value="161" />
     </breakpoint-manager>
     <watches-manager>
       <configuration name="CMakeGoogleTestRunConfigurationType">
-        <watch expression="sq_j" />
-        <watch expression="sq_i" />
-        <watch expression="real_x" />
-        <watch expression="real_y" />
-        <watch expression="density[2857]" language="ObjectiveC" />
-        <watch expression="phiMap[2857]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * i + OY_LEN]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * (i + 1) + OY_LEN]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * (i -1) + OY_LEN]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * (i - 1) + OY_LEN - 1]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * i + OY_LEN - 1]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * (i + 1) + OY_LEN - 1]" language="ObjectiveC" />
+        <watch expression="rp[OY_LEN_1 * i + OY_LEN]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * (i - 1) + j - 1]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * i + j - 1]" language="ObjectiveC" />
+        <watch expression="u[OY_LEN_1 * (i + 1) + j - 1]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * i + j]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * (i + 1) + j]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * (i + 1) + j + 1]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * i + j + 1]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * (i - 1) + j + 1]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * (i -1) + j]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * (i - 1) + j - 1]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * i + j - 1]" language="ObjectiveC" />
+        <watch expression="u_xx[OY_LEN_1 * (i + 1) + j - 1]" language="ObjectiveC" />
+        <watch expression="rp_u_xx[OY_LEN_1 * i + j]" language="ObjectiveC" />
+        <watch expression="f_u_xx_check[OY_LEN_1 * i + j]" language="ObjectiveC" />
       </configuration>
       <configuration name="CMakeRunConfiguration">
         <watch expression="XY_LEN" />
@@ -509,6 +563,22 @@
     </watches-manager>
   </component>
   <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/fem/solver4.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="836" column="67" selection-start-line="836" selection-start-column="12" selection-end-line="836" selection-end-column="67" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/!LaplasLida-rp-new.red">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="41" column="37" selection-start-line="41" selection-start-column="9" selection-end-line="41" selection-end-column="37" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/main.cpp">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
@@ -550,11 +620,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="2" column="13" selection-start-line="2" selection-start-column="13" selection-end-line="2" selection-end-column="13" />
           <folding>
-            <element signature="e#1449#5680#0" expanded="false" />
-            <element signature="e#5756#8102#0" expanded="false" />
-            <element signature="e#8192#12407#0" expanded="false" />
-            <element signature="e#12497#16213#0" expanded="false" />
-            <element signature="e#16370#20103#0" expanded="false" />
+            <element signature="e#10691#14407#0" expanded="false" />
+            <element signature="e#14564#18297#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -600,11 +667,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="2" column="13" selection-start-line="2" selection-start-column="13" selection-end-line="2" selection-end-column="13" />
           <folding>
-            <element signature="e#1449#5680#0" expanded="false" />
-            <element signature="e#5756#8102#0" expanded="false" />
-            <element signature="e#8192#12407#0" expanded="false" />
-            <element signature="e#12497#16213#0" expanded="false" />
-            <element signature="e#16370#20103#0" expanded="false" />
+            <element signature="e#10691#14407#0" expanded="false" />
+            <element signature="e#14564#18297#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -650,11 +714,8 @@
         <state vertical-scroll-proportion="0.0">
           <caret line="2" column="13" selection-start-line="2" selection-start-column="13" selection-end-line="2" selection-end-column="13" />
           <folding>
-            <element signature="e#1449#5680#0" expanded="false" />
-            <element signature="e#5756#8102#0" expanded="false" />
-            <element signature="e#8192#12407#0" expanded="false" />
-            <element signature="e#12497#16213#0" expanded="false" />
-            <element signature="e#16370#20103#0" expanded="false" />
+            <element signature="e#10691#14407#0" expanded="false" />
+            <element signature="e#14564#18297#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -767,16 +828,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/fem/solver4.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="836" column="67" selection-start-line="836" selection-start-column="12" selection-end-line="836" selection-end-column="67" />
-          <folding>
-            <element signature="e#0#17#0" expanded="false" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/fem_tests/lib/gtest-1.7.0/src/gtest_main.cc">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.7962648">
@@ -795,7 +846,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.36082473">
           <caret line="7" column="0" selection-start-line="7" selection-start-column="0" selection-end-line="7" selection-end-column="0" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -811,19 +861,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/fem/consts.h">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="23" column="14" selection-start-line="23" selection-start-column="14" selection-end-line="23" selection-end-column="14" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/fem_tests/CMakeLists.txt">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="0" column="18" selection-start-line="0" selection-start-column="18" selection-end-line="0" selection-end-column="18" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -841,28 +882,10 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/fem/solver3.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="382" column="8" selection-start-line="382" selection-start-column="8" selection-end-line="497" selection-end-column="13" />
-          <folding>
-            <element signature="e#0#17#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/fem/CMakeLists.txt">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
           <caret line="14" column="54" selection-start-line="14" selection-start-column="54" selection-end-line="14" selection-end-column="54" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/fem/consts.cpp">
-      <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.0">
-          <caret line="29" column="23" selection-start-line="29" selection-start-column="23" selection-end-line="29" selection-end-column="23" />
           <folding />
         </state>
       </provider>
@@ -877,24 +900,34 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/fem_tests/tests/tests.cpp">
+    <entry file="file://$PROJECT_DIR$/!LaplasLida-rp-new.red">
       <provider selected="true" editor-type-id="text-editor">
         <state vertical-scroll-proportion="0.0">
-          <caret line="17" column="3" selection-start-line="17" selection-start-column="3" selection-end-line="17" selection-end-column="3" />
-          <folding>
-            <element signature="e#1449#5680#0" expanded="false" />
-            <element signature="e#5756#8102#0" expanded="false" />
-            <element signature="e#8192#12407#0" expanded="false" />
-            <element signature="e#12497#16213#0" expanded="false" />
-            <element signature="e#16370#20103#0" expanded="false" />
-          </folding>
+          <caret line="41" column="37" selection-start-line="41" selection-start-column="9" selection-end-line="41" selection-end-column="37" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fem/solver4.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="836" column="67" selection-start-line="836" selection-start-column="12" selection-end-line="836" selection-end-column="67" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fem/consts.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="35" column="18" selection-start-line="35" selection-start-column="18" selection-end-line="35" selection-end-column="18" />
+          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/fem/utils.h">
       <provider selected="true" editor-type-id="text-editor">
-        <state vertical-scroll-proportion="0.13826367">
-          <caret line="226" column="0" selection-start-line="226" selection-start-column="0" selection-end-line="226" selection-end-column="0" />
+        <state vertical-scroll-proportion="0.0">
+          <caret line="195" column="0" selection-start-line="195" selection-start-column="0" selection-end-line="195" selection-end-column="0" />
           <folding>
             <element signature="e#132#461#0" expanded="false" />
             <element signature="e#463#543#0" expanded="false" />
@@ -906,6 +939,35 @@
             <element signature="e#1024#1112#0" expanded="false" />
             <element signature="e#1114#2134#0" expanded="false" />
             <element signature="e#2136#3202#0" expanded="false" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fem/consts.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="43" column="0" selection-start-line="43" selection-start-column="0" selection-end-line="43" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fem/solver3.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.0">
+          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+          <folding>
+            <element signature="e#0#17#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/fem_tests/tests/tests.cpp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state vertical-scroll-proportion="0.18126889">
+          <caret line="308" column="19" selection-start-line="308" selection-start-column="19" selection-end-line="308" selection-end-column="19" />
+          <folding>
+            <element signature="e#10691#14407#0" expanded="false" />
+            <element signature="e#14564#18297#0" expanded="false" />
           </folding>
         </state>
       </provider>

@@ -38,5 +38,6 @@ extern int CP00; // corner point (0,0) - bottom left
 extern int CP10; // corner point (1,0) - bottom right
 extern int CP11; // corner point (1,1) - top right
 extern int CP01; // corner point (0,1) - top left
+extern int TYPE_EXACT; // type of the exact solution
 
 #endif //FEM_CIRCLE_CONSTS_H

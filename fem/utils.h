@@ -163,6 +163,14 @@ inline double get_l1_norm_vec(int x_len, int y_len, double *data) { // new
     return r / (x_len * y_len);
 }
 
+inline double get_l2_norm_vec(int x_len, int y_len, double *data) { // new
+    double r = 0.;
+    for (int i = 0; i < x_len; ++i)
+        for (int j = 0; j < y_len; ++j)
+            r += data[y_len * i + j] * data[y_len * i + j];
+    return r / (x_len * y_len);
+}
+
 
 inline double get_l1_norm(double hx, double hy, int x_len, int y_len, double *data) { // old
     double r = 0.;

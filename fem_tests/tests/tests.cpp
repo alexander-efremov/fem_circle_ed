@@ -118,6 +118,7 @@ TEST_F(FemFixture, test3_1) {
             TIME_STEP_CNT = 2700;
             XY_LEN = OX_LEN_1 * OY_LEN_1;
 
+            /*
             init_boundary_arrays_and_cp();
 
             int midIndexX = OX_LEN_1 / 2;
@@ -139,13 +140,6 @@ TEST_F(FemFixture, test3_1) {
                     G4[j] = 1;
                 }
             }
-/*
-            CP00 = 1;
-            CP10 = 1;
-            CP01 = 1;
-            CP11 = 1;
-
-            */
 
             CP00 = 0;
             CP10 = 0;
@@ -190,6 +184,8 @@ TEST_F(FemFixture, test3_1) {
             delete[] exact0;
             delete[] exactT;
             delete[] err;
+             */
+
         }
     }
 }
@@ -253,6 +249,7 @@ TEST_F(FemFixture, test3_2) {
 
             TIME_STEP_CNT = 50;
             XY_LEN = OX_LEN_1 * OY_LEN_1;
+/*
 
             double x0 = get_center_x();
             double y0 = get_center_y();
@@ -273,6 +270,7 @@ TEST_F(FemFixture, test3_2) {
 
             delete[] exact0;
             delete[] exactT;
+            */
         }
     }
 }
@@ -284,7 +282,7 @@ TEST_F(FemFixture, test3_3) {
     for (int iter = 0; iter < 1; ++iter) {
 
         double d = 0;
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 1; ++i) {
             switch (i) {
                 case 0:
                     d = 50.;
@@ -308,13 +306,12 @@ TEST_F(FemFixture, test3_3) {
                     return;
             }
 
+            d = 100.;
+
             A = 0.;
             B = 1.;
             C = 0.;
             D = 1.;
-            R_SQ = 0.099 * 0.099;
-            INN_DENSITY = 1.;
-            OUT_DENSITY = 0.;
 
             OX_LEN = (int) d;
             OY_LEN = (int) d;
@@ -322,74 +319,18 @@ TEST_F(FemFixture, test3_3) {
             OY_LEN_1 = OY_LEN + 1;
             HX = (B - A) / OX_LEN;
             HY = (D - C) / OY_LEN;
-            IDEAL_SQ_SIZE_X = 128 * (iter + 1);
-            IDEAL_SQ_SIZE_Y = 128 * (iter + 1);
-
-            CENTER_OFFSET_X = 0.5;
-            CENTER_OFFSET_Y = 0.7;
-
-            INTEGR_TYPE = 1;
-
-            U_VELOCITY = 1.;
-            V_VELOCITY = 1.;
-            OMEGA = 1.;
-
-            TAU = 16. / pow(2., (i + 1));
-            TAU *= 1.e-3;
-
-            TIME_STEP_CNT = (int) pow(2., i);
             XY_LEN = OX_LEN_1 * OY_LEN_1;
+            //TYPE_EXACT = 1;
 
-            init_boundary_arrays_and_cp();
+            //init_boundary_arrays_and_cp();
 
-            int midIndexX = OX_LEN_1 / 2;
-            int midIndexY = OY_LEN_1 / 2;
-            for (int i = 0; i < OX_LEN_1; ++i) {
-                if (i * HX + A < .5 && i > 0)
-                    G1[i] = 1;
-            }
-            for (int j = 0; j < OY_LEN_1; ++j) {
-                if (j * HY + C < .5 && j > 0)
-                    G2[j] = 1;
-            }
-            for (int i = 0; i < OX_LEN_1; ++i) {
-                if (i * HX + A > .5 && i < OX_LEN_1 - 1)
-                    G3[i] = 1;
-            }
-            for (int j = 0; j < OY_LEN_1; ++j) {
-                if (j * HY + C > .5 && j > 0 && j < OX_LEN_1 - 1) {
-                    G4[j] = 1;
-                }
-            }
-
-            CP00 = 1;
-            CP10 = 1;
-            CP01 = 1;
-            CP11 = 1;
-
-            /*
-
-             CP00 = 0;
-             CP10 = 0;
-             CP01 = 0;
-             CP11 = 0;
-
-             */
 
             print_params();
-            printf("rel = %le\n", HX / (-HY + 1.));
-            printf("midIndexX = %d\n", midIndexX);
-            printf("midIndexY = %d\n", midIndexY);
-            printf("G1\n");
-            print_vector(G1, OX_LEN_1);
-            printf("G2\n");
-            print_vector(G2, OY_LEN_1);
-            printf("G3\n");
-            print_vector(G3, OX_LEN_1);
-            printf("G4\n");
-            print_vector(G4, OY_LEN_1);
 
-            double *density = solve_3(tme);
+
+            double *u = solve_3(tme);
+
+            /*
             double *err = calc_error_3(HX, HY, TAU * TIME_STEP_CNT, density);
             double *exact0 = get_exact_solution_3(HX, HY, 0);
             double *exactT = get_exact_solution_3(HX, HY, TAU * TIME_STEP_CNT);
@@ -409,10 +350,13 @@ TEST_F(FemFixture, test3_3) {
             double l_inf = get_l_inf_norm(OX_LEN_1, OY_LEN_1, err);
             printf("l1 %le \n", l1);
             printf("l_inf %le\n", l_inf);
-            delete[] density;
+
             delete[] exact0;
             delete[] exactT;
             delete[] err;
+
+            */
+            delete[] u;
         }
     }
 }
